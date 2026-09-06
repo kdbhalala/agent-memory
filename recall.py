@@ -13,6 +13,6 @@ def recall(query: str, l1: MemoryLayer, l2: MemoryLayer | None = None,
     if l2 is not None and (deep or len(recent) < 2):
         try:
             result["durable"] = l2.search(query, limit=limit)
-        except RuntimeError:
-            pass  # L2 optional (e.g. cognee not installed)
+        except Exception as e:  # L2 optional: degrade to L1, say why
+            result["note"] = f"durable layer skipped: {type(e).__name__}"
     return result

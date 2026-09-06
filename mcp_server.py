@@ -59,6 +59,8 @@ def call_tool(name, args):
         out = "## recent\n" + _hits_text(r["recent"])
         if r["durable"]:
             out += "\n\n## durable\n" + _hits_text(r["durable"])
+        elif r.get("note"):
+            out += f"\n\n({r['note']})"
         return out
     if name == "memory_promote":
         from layers.cognee_layer import CogneeLayer
