@@ -58,11 +58,13 @@ async def main():
         except Exception as e:
             ans, ok, err = "", False, type(e).__name__
         lat = round(time.perf_counter() - t, 1)
-        rows.append({"q": q, "ok": ok, "lat": lat, "err": err})
+        rows.append({"q": q, "ok": ok, "lat": lat, "err": err,
+                     "ans": ans[:300]})
         print(f"{'PASS' if ok else 'FAIL'} {lat:.0f}s :: {q[:60]}", flush=True)
     acc = sum(r["ok"] for r in rows) / len(rows)
     print(f"\nL2: {sum(r['ok'] for r in rows)}/{len(rows)} = {acc:.0%}")
-    json.dump(rows, open("results_l2.json", "w"), indent=1)
+    out = os.getenv("EVAL_OUT", "results_l2.json")
+    json.dump(rows, open(out, "w"), indent=1)
     await cognee.forget(dataset="durable_eval")
 
 

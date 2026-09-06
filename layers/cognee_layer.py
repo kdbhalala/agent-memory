@@ -30,7 +30,7 @@ def ensure_llm_env() -> None:
         return
     os.environ.setdefault("LLM_API_KEY", key)
     os.environ.setdefault("LLM_PROVIDER", "custom")
-    os.environ.setdefault("LLM_MODEL", "openrouter/openai/gpt-4o-mini")
+    os.environ.setdefault("LLM_MODEL", "openrouter/upstage/solar-pro4")
     os.environ.setdefault("LLM_ENDPOINT", "https://openrouter.ai/api/v1")
     os.environ.setdefault("EMBEDDING_PROVIDER", "custom")
     os.environ.setdefault("EMBEDDING_MODEL", "openrouter/openai/text-embedding-3-small")

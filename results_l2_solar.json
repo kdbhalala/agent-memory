@@ -1,0 +1,44 @@
+[
+ {
+  "q": "What haptics pattern was chosen?",
+  "ok": true,
+  "lat": 3.0,
+  "err": null,
+  "ans": "{'dataset_id': UUID('6fdd56c5-ce76-5e3c-9ea7-198a3b93733b'), 'dataset_name': 'durable_eval', 'dataset_tenant_id': None, 'search_result': ['The decision was to use two tiny free functions: **hapticTap** and **hapticToggle**, rather than a haptics service.']}"
+ },
+ {
+  "q": "What is the dart format rule?",
+  "ok": true,
+  "lat": 2.9,
+  "err": null,
+  "ans": "{'dataset_id': UUID('6fdd56c5-ce76-5e3c-9ea7-198a3b93733b'), 'dataset_name': 'durable_eval', 'dataset_tenant_id': None, 'search_result': ['It requires dart format to target only explicitly changed files.']}"
+ },
+ {
+  "q": "What is the Legix phase 1 scope?",
+  "ok": true,
+  "lat": 3.7,
+  "err": null,
+  "ans": "{'dataset_id': UUID('6fdd56c5-ce76-5e3c-9ea7-198a3b93733b'), 'dataset_name': 'durable_eval', 'dataset_tenant_id': None, 'search_result': ['Legix phase 1 scope covers personal income tax filing. Business bookkeeping is explicitly deferred and not part of Phase 1.']}"
+ },
+ {
+  "q": "Should Form 16 be a separate screen?",
+  "ok": true,
+  "lat": 3.4,
+  "err": null,
+  "ans": "{'dataset_id': UUID('6fdd56c5-ce76-5e3c-9ea7-198a3b93733b'), 'dataset_name': 'durable_eval', 'dataset_tenant_id': None, 'search_result': ['No, Form 16 should not be a separate screen. All client documents, including Form 16, are uploaded to a single Documents screen with OCR and categorization stage"
+ },
+ {
+  "q": "The project that chose free haptic functions also had a format incident. What rule resulted?",
+  "ok": true,
+  "lat": 6.0,
+  "err": null,
+  "ans": "{'dataset_id': UUID('6fdd56c5-ce76-5e3c-9ea7-198a3b93733b'), 'dataset_name': 'durable_eval', 'dataset_tenant_id': None, 'search_result': ['It requires dart format to target only explicitly changed files.']}"
+ },
+ {
+  "q": "Legix is the book of record, not a feeder. A feeder into what?",
+  "ok": true,
+  "lat": 3.2,
+  "err": null,
+  "ans": "{'dataset_id': UUID('6fdd56c5-ce76-5e3c-9ea7-198a3b93733b'), 'dataset_name': 'durable_eval', 'dataset_tenant_id': None, 'search_result': ['Tally.']}"
+ }
+]
