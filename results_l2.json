@@ -1,0 +1,38 @@
+[
+ {
+  "q": "What haptics pattern was chosen?",
+  "ok": true,
+  "lat": 4.1,
+  "err": null
+ },
+ {
+  "q": "What is the dart format rule?",
+  "ok": true,
+  "lat": 3.5,
+  "err": null
+ },
+ {
+  "q": "What is the Legix phase 1 scope?",
+  "ok": true,
+  "lat": 3.7,
+  "err": null
+ },
+ {
+  "q": "Should Form 16 be a separate screen?",
+  "ok": true,
+  "lat": 3.6,
+  "err": null
+ },
+ {
+  "q": "The project that chose free haptic functions also had a format incident. What rule resulted?",
+  "ok": true,
+  "lat": 3.9,
+  "err": null
+ },
+ {
+  "q": "Legix is the book of record, not a feeder. A feeder into what?",
+  "ok": true,
+  "lat": 3.5,
+  "err": null
+ }
+]

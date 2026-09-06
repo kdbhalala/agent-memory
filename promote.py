@@ -11,6 +11,15 @@ DB = Path.home() / ".claude-mem" / "claude-mem.db"
 STATE = Path(__file__).parent / "promoted.json"
 DURABLE_TYPES = {"decision", "bugfix", "feature"}
 DURABLE_CONCEPTS = {"why-it-exists", "pattern", "gotcha", "trade-off", "how-it-works"}
+import re as _re
+NO_SIGNAL = _re.compile(
+    r"^(none[\s,]*)+$|no (new |technical )?(patterns|learnings|work|changes)|"
+    r"nothing (new|learned)|not (yet |currently )?(identified|performed|introduced)|"
+    r"no work has been performed", _re.I)
+
+
+def _signal(body: str) -> bool:
+    return len(body) >= 60 and not NO_SIGNAL.search(body)
 
 
 def _load_state() -> set:
@@ -31,8 +40,8 @@ def collect(project: str | None = None, since_epoch: int = 0) -> list[str]:
         q += " AND project = ?"
         args.append(project)
     for proj, learned, completed in con.execute(q, args).fetchall():
-        body = " ".join(p for p in (learned, completed) if p).strip()
-        if body:
+        body = " ".join(p for p in (learned, completed) if p and p != "None").strip()
+        if _signal(body):
             out.append(f"[{proj}] session learning: {body}")
     q = ("SELECT project, title, facts, concepts FROM observations "
          "WHERE created_at_epoch > ? AND type IN ('decision','bugfix','feature')")
