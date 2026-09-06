@@ -35,3 +35,12 @@ Either layer implements `layers/base.py::MemoryLayer` — replaceable.
 | agy | n/a (has claude-mem MCP) | `agy mcp add` ✓ enabled |
 | crush | n/a | `~/.config/crush/mcp.json` ✓ |
 | pi | n/a | `pi-mcp-extension` + `~/.pi/agent/mcp.json` ✓ |
+
+## Hands-off notes
+
+* Capture is fully automatic wherever claude-mem hooks are installed.
+* Worker autostart: `~/Library/LaunchAgents/ai.cmem.worker.plist` (survives reboot).
+* Retrieval via MCP is on-demand: agents call it when relevant. First MCP call
+  in interactive agents (codex etc.) asks one approval — approve once.
+* `memory_promote` is manual by design (LLM cost + curation judgment).
+  Verified live: codex `memory_recall` returned `#13326` end-to-end.
