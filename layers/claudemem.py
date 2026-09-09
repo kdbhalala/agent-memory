@@ -78,7 +78,7 @@ class ClaudeMemLayer(MemoryLayer):
         return self._bodies_by_id(ids)
 
     def _bodies_by_id(self, ids: list[str]) -> list[Hit]:
-        if not ids:
+        if not ids or not DB.exists():
             return []
         con = sqlite3.connect(f"file:{DB}?mode=ro", uri=True)
         ph = ",".join("?" for _ in ids)
@@ -97,6 +97,8 @@ class ClaudeMemLayer(MemoryLayer):
         return [by_id[str(i)] for i in ids if str(i) in by_id]
 
     def _via_sqlite(self, query: str, limit: int) -> list[Hit]:
+        if not DB.exists():
+            return []
         tokens = [t for t in re.findall(r"[a-z0-9]+", query.lower())
                   if len(t) > 2 and t not in STOPWORDS] or re.findall(
                       r"[a-z0-9]+", query.lower())
@@ -115,3 +117,72 @@ class ClaudeMemLayer(MemoryLayer):
         rows = con.execute(sql, args).fetchall()
         con.close()
         return self._bodies_by_id([str(i) for (i,) in rows])
+
+    def record(self, text: str, title: str | None = None,
+               project: str | None = None, metadata: dict | None = None) -> dict:
+        """Record an observation/decision into L1 memory via worker HTTP or SQLite."""
+        proj = project or self.project or "global"
+        tit = title or (text[:60].strip() + ("..." if len(text) > 60 else ""))
+
+        # Primary: worker HTTP endpoint
+        try:
+            req_data = {
+                "text": text,
+                "title": tit,
+                "project": proj,
+                "metadata": metadata or {}
+            }
+            req = urllib.request.Request(
+                f"{self.worker}/api/memory/save",
+                data=json.dumps(req_data).encode("utf-8"),
+                headers={"Content-Type": "application/json"}
+            )
+            with urllib.request.urlopen(req, timeout=5) as resp:
+                res = json.load(resp)
+                return {
+                    "id": res.get("id"),
+                    "title": tit,
+                    "project": proj,
+                    "message": res.get("message", f"Memory saved as observation #{res.get('id')}")
+                }
+        except Exception:
+            pass
+
+        # Fallback: direct SQLite insertion
+        if not DB.exists():
+            raise RuntimeError(f"Database {DB} does not exist and worker is offline")
+        import hashlib
+        import time
+        import uuid
+
+        now_iso = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+        now_epoch = int(time.time() * 1000)
+        session_id = str(uuid.uuid4())
+        content_hash = hashlib.sha256(text.encode()).hexdigest()[:16]
+
+        con = sqlite3.connect(DB)
+        cur = con.cursor()
+        cur.execute("""
+            INSERT INTO observations (
+                memory_session_id, project, type, title, subtitle,
+                facts, narrative, concepts, files_read, files_modified,
+                prompt_number, discovery_tokens, created_at, created_at_epoch,
+                content_hash, generated_by_model, relevance_count, sync_rev
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            session_id, proj, "decision", tit, "Recorded via agent-memory",
+            json.dumps([text]), text, json.dumps(["decision", "pattern"]),
+            "[]", "[]", 1, 0, now_iso, now_epoch, content_hash, "agent-memory", 0, "1"
+        ))
+        obs_id = cur.lastrowid
+        con.commit()
+        con.close()
+        return {
+            "id": obs_id,
+            "title": tit,
+            "project": proj,
+            "message": f"Memory saved directly to SQLite as observation #{obs_id}"
+        }
+
+    def add(self, text: str) -> None:
+        self.record(text)

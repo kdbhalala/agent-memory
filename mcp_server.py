@@ -31,6 +31,13 @@ TOOLS = [
                                     "project": {"type": "string", "description": "Optional project name filter"},
                                     "limit": {"type": "integer", "default": 5, "description": "Max hits to return"}},
                      "required": ["query"]}},
+    {"name": "memory_record",
+     "description": "Save a decision, architectural choice, pattern, rule, or bugfix into session memory so all agents can recall it.",
+     "inputSchema": {"type": "object",
+                     "properties": {"text": {"type": "string", "description": "The technical observation, decision, or learning to record"},
+                                    "title": {"type": "string", "description": "Short descriptive title for this memory"},
+                                    "project": {"type": "string", "description": "Target project name"}},
+                     "required": ["text"]}},
     {"name": "memory_promote",
      "description": "Curate durable knowledge from session memory into long-term storage.",
      "inputSchema": {"type": "object",
@@ -69,6 +76,13 @@ def call_tool(name, args):
         elif r.get("note"):
             out += f"\n\n({r['note']})"
         return out
+    if name == "memory_record":
+        text = str(args.get("text", "")).strip()
+        if not text:
+            return "error: 'text' parameter is required"
+        title = args.get("title")
+        res = l1.record(text=text, title=title, project=project)
+        return res.get("message", f"Memory saved as observation #{res.get('id')}")
     if name == "memory_promote":
         from layers.cognee_layer import CogneeLayer
         import promote

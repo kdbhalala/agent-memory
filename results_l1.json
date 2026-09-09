@@ -2,7 +2,7 @@
  {
   "q": "What was decided about haptics, service or functions?",
   "ok": true,
-  "lat": 0.03
+  "lat": 0.02
  },
  {
   "q": "What is the rule about dart format?",
@@ -17,7 +17,7 @@
  {
   "q": "TapArea for custom widgets, what about lgw primitives?",
   "ok": true,
-  "lat": 0.01
+  "lat": 0.02
  },
  {
   "q": "What is the audit-agent-stale-baseline pattern?",
@@ -27,7 +27,7 @@
  {
   "q": "What is Legix phase 1 scope?",
   "ok": true,
-  "lat": 0.02
+  "lat": 0.01
  },
  {
   "q": "Should Form 16 be a separate screen in Legix?",

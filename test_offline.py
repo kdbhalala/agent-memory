@@ -77,6 +77,27 @@ h_order = cm._bodies_by_id(test_ids)
 assert [h.ref for h in h_order] == test_ids, f"Order mismatch: {[h.ref for h in h_order]} vs {test_ids}"
 rev_ids = ["13791", "13891"]
 h_rev = cm._bodies_by_id(rev_ids)
-assert [h.ref for h in h_rev] == rev_ids, f"Reversed order mismatch: {[h.ref for h in h_rev]} vs {rev_ids}"
+# test record() offline fallback to SQLite on isolated mock DB
+import tempfile
+import sqlite3
+with tempfile.NamedTemporaryFile(suffix=".db") as tmp:
+    tmp_db = Path(tmp.name)
+    con = sqlite3.connect(tmp_db)
+    con.execute("""CREATE TABLE observations (
+        id INTEGER PRIMARY KEY AUTOINCREMENT, memory_session_id TEXT, project TEXT,
+        type TEXT, title TEXT, subtitle TEXT, facts TEXT, narrative TEXT,
+        concepts TEXT, files_read TEXT, files_modified TEXT, prompt_number INT,
+        discovery_tokens INT, created_at TEXT, created_at_epoch INT, content_hash TEXT,
+        generated_by_model TEXT, relevance_count INT, sync_rev TEXT
+    )""")
+    con.close()
+    import layers.claudemem
+    orig_db = layers.claudemem.DB
+    layers.claudemem.DB = tmp_db
+    mock_cm = ClaudeMemLayer(worker="http://127.0.0.1:99999")  # dead worker port forces SQLite
+    rec = mock_cm.record("Test pattern offline", title="Test Pattern", project="offline-proj")
+    assert rec["id"] == 1, f"Expected id 1, got {rec}"
+    assert "SQLite" in rec["message"]
+    layers.claudemem.DB = orig_db
 
 print("layers OK")

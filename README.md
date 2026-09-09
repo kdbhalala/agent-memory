@@ -32,15 +32,15 @@ python promote.py --project my-repo --limit 20
 
 Either layer implements `layers/base.py::MemoryLayer` — replaceable.
 
-## Wiring (MCP server: `python3 mcp_server.py`, tools `memory_recall`, `memory_recall_deep`, `memory_promote`)
+## Wiring (MCP server: `python3 mcp_server.py`, tools: `memory_recall`, `memory_recall_deep`, `memory_record`, `memory_promote`)
 
-| Agent | claude-mem capture | agent-memory MCP |
+| Agent | Memory capture | agent-memory MCP |
 |---|---|---|
 | Claude Code | plugin ✓ | `claude mcp add agent-memory` ✓ connected |
 | OpenCode | plugin ✓ | `opencode.jsonc` `mcp` ✓ (restart session to load) |
 | Codex | plugin + hooks ✓ | `config.toml [mcp_servers.agent-memory]` ✓ enabled |
 | Copilot | installer ran (capture unconfirmed) | `copilot mcp add` ✓ listed |
-| agy | n/a (has claude-mem MCP) | `agy mcp add` ✓ enabled |
+| agy | `memory_record` + global skill ✓ | `~/.gemini/config/mcp_config.json` ✓ enabled |
 | crush | n/a | `~/.config/crush/mcp.json` ✓ |
 | pi | n/a | `pi-mcp-extension` + `~/.pi/agent/mcp.json` ✓ |
 
