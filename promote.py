@@ -13,7 +13,7 @@ DURABLE_TYPES = {"decision", "bugfix", "feature"}
 DURABLE_CONCEPTS = {"why-it-exists", "pattern", "gotcha", "trade-off", "how-it-works"}
 import re as _re
 NO_SIGNAL = _re.compile(
-    r"^(none[\s,]*)+$|no (new |technical )?(patterns|learnings|work|changes)|"
+    r"^(none[\s,]*)+$|no (?:new |technical )*(patterns|learnings|work|changes)|"
     r"nothing (new|learned)|not (yet |currently )?(identified|performed|introduced)|"
     r"no work has been performed", _re.I)
 
@@ -57,12 +57,51 @@ def collect(project: str | None = None, since_epoch: int = 0) -> list[str]:
     return out
 
 
-def promote(l2, project: str | None = None, since_epoch: int = 0) -> list[str]:
+def promote(l2, project: str | None = None, since_epoch: int = 0,
+            limit: int | None = None) -> list[str]:
     seen = _load_state()
     fresh = [t for t in collect(project, since_epoch)
              if hashlib.sha1(t.encode()).hexdigest() not in seen]
+    if limit is not None:
+        fresh = fresh[:limit]
     for text in fresh:
         l2.add(text)
         seen.add(hashlib.sha1(text.encode()).hexdigest())
     _save_state(seen)
     return fresh
+
+
+if __name__ == "__main__":
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Promote durable knowledge from L1 to L2.")
+    parser.add_argument("--project", "-p", default=None, help="Filter by project name")
+    parser.add_argument("--dry-run", "-n", action="store_true",
+                        help="Preview candidates without invoking L2 or modifying state")
+    parser.add_argument("--limit", "-l", type=int, default=None,
+                        help="Max items to promote/preview")
+    args = parser.parse_args()
+
+    seen = _load_state()
+    candidates = collect(args.project)
+    fresh = [t for t in candidates if hashlib.sha1(t.encode()).hexdigest() not in seen]
+    if args.limit:
+        fresh = fresh[:args.limit]
+
+    print(f"Total candidates: {len(candidates)} | Fresh (unpromoted): {len(fresh)}")
+    if args.dry_run:
+        preview_count = min(len(fresh), 5)
+        if preview_count:
+            print(f"\n[Dry Run] Showing {preview_count} sample candidate(s):")
+            for idx, item in enumerate(fresh[:preview_count], 1):
+                print(f"  {idx}. {item[:140]}...")
+        else:
+            print("No fresh candidates found.")
+    else:
+        if not fresh:
+            print("Nothing new to promote.")
+        else:
+            from layers.cognee_layer import CogneeLayer
+            l2 = CogneeLayer()
+            promoted = promote(l2, project=args.project, limit=args.limit)
+            print(f"Successfully promoted {len(promoted)} item(s) to L2.")

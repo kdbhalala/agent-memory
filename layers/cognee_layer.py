@@ -17,15 +17,17 @@ _CMEM_SETTINGS = Path.home() / ".claude-mem" / "settings.json"
 
 def ensure_llm_env() -> None:
     """Agents spawn MCP servers with a bare env. Fill missing LLM settings
-    from the machine's claude-mem config (same user, same purpose).
+    from OPENROUTER_API_KEY or the machine's claude-mem config.
     Key material stays in-process, never logged."""
     if os.getenv("LLM_API_KEY"):
         return
-    try:
-        cfg = json.loads(_CMEM_SETTINGS.read_text())
-    except Exception:
-        return
-    key = cfg.get("CLAUDE_MEM_OPENROUTER_API_KEY", "")
+    key = os.getenv("OPENROUTER_API_KEY", "")
+    if not key and _CMEM_SETTINGS.exists():
+        try:
+            cfg = json.loads(_CMEM_SETTINGS.read_text())
+            key = cfg.get("CLAUDE_MEM_OPENROUTER_API_KEY", "")
+        except Exception:
+            pass
     if not key:
         return
     os.environ.setdefault("LLM_API_KEY", key)

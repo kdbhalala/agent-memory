@@ -61,6 +61,14 @@ fresh = promote.promote(fake)
 assert len(fresh) == len(cands) and len(getattr(fake, "added", [])) == len(cands)
 assert promote.promote(fake) == [], "second run must promote nothing"
 
+# promote batch limit
+promote.STATE = Path("/tmp/promote-test-limit.json")
+if promote.STATE.exists():
+    promote.STATE.unlink()
+fake_ltd = FakeL2()
+batch = promote.promote(fake_ltd, limit=5)
+assert len(batch) == 5 and len(fake_ltd.added) == 5, f"Expected 5 promoted, got {len(batch)}"
+
 # _bodies_by_id preserves rank order
 from layers.claudemem import ClaudeMemLayer
 cm = ClaudeMemLayer()
