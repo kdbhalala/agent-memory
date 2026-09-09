@@ -5,6 +5,8 @@
 * **L2 `cognee`** (`layers/cognee_layer.py`): durable knowledge only
   (architecture, decisions, reusable fixes). Lazy import — L1 works without it.
 
+### Quickstart (Python API)
+
 ```python
 from layers.claudemem import ClaudeMemLayer
 from layers.cognee_layer import CogneeLayer
@@ -14,12 +16,18 @@ r = recall("auth bug", ClaudeMemLayer(), CogneeLayer())  # L2 only if L1 thin
 r = recall("auth bug", ClaudeMemLayer(), CogneeLayer(), deep=True)  # force L2
 ```
 
-Promote session learnings to durable storage (dedupe via `promoted.json`):
+### CLI
 
-```python
-from layers.cognee_layer import CogneeLayer
-from promote import promote
-promote(CogneeLayer(), project="my-repo")  # session summaries + durable concepts only
+```bash
+# Query session and durable memory directly from terminal
+python recall.py "auth bug" --project my-repo
+python recall.py "architecture decisions" --deep --limit 5
+
+# Preview durable candidates (dry-run: zero LLM tokens)
+python promote.py --dry-run --project my-repo
+
+# Promote curated candidates L1 -> L2 (deduped via promoted.json)
+python promote.py --project my-repo --limit 20
 ```
 
 Either layer implements `layers/base.py::MemoryLayer` — replaceable.

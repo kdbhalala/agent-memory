@@ -20,21 +20,22 @@ TOOLS = [
     {"name": "memory_recall",
      "description": "Search recent agent session memory (decisions, fixes, context). Fast, local.",
      "inputSchema": {"type": "object",
-                     "properties": {"query": {"type": "string"},
-                                    "project": {"type": "string"},
-                                    "limit": {"type": "integer", "default": 5}},
+                     "properties": {"query": {"type": "string", "description": "Search query or keywords to recall"},
+                                    "project": {"type": "string", "description": "Optional project name filter"},
+                                    "limit": {"type": "integer", "default": 5, "description": "Max hits to return"}},
                      "required": ["query"]}},
     {"name": "memory_recall_deep",
      "description": "Search session memory AND durable long-term knowledge (architecture, reusable fixes).",
      "inputSchema": {"type": "object",
-                     "properties": {"query": {"type": "string"},
-                                    "project": {"type": "string"},
-                                    "limit": {"type": "integer", "default": 5}},
+                     "properties": {"query": {"type": "string", "description": "Search query or keywords to recall"},
+                                    "project": {"type": "string", "description": "Optional project name filter"},
+                                    "limit": {"type": "integer", "default": 5, "description": "Max hits to return"}},
                      "required": ["query"]}},
     {"name": "memory_promote",
-     "description": "Curate durable knowledge from session memory into long-term storage. Run weekly per project.",
+     "description": "Curate durable knowledge from session memory into long-term storage.",
      "inputSchema": {"type": "object",
-                     "properties": {"project": {"type": "string"}},
+                     "properties": {"project": {"type": "string", "description": "Optional project filter"},
+                                    "limit": {"type": "integer", "default": 20, "description": "Max candidates to promote"}},
                      "required": []}},
 ]
 
@@ -48,14 +49,20 @@ def call_tool(name, args):
     limit = int(args.get("limit", 5) or 5)
     l1 = ClaudeMemLayer(project=project)
     if name == "memory_recall":
-        return _hits_text(l1.search(args["query"], limit))
+        query = str(args.get("query", "")).strip()
+        if not query:
+            return "(empty query)"
+        return _hits_text(l1.search(query, limit))
     if name == "memory_recall_deep":
+        query = str(args.get("query", "")).strip()
+        if not query:
+            return "(empty query)"
         try:
             from layers.cognee_layer import CogneeLayer
             l2: MemoryLayer | None = CogneeLayer()
         except Exception:
             l2 = None
-        r = recall(args["query"], l1, l2, limit=limit, deep=True)
+        r = recall(query, l1, l2, limit=limit, deep=True)
         out = "## recent\n" + _hits_text(r["recent"])
         if r["durable"]:
             out += "\n\n## durable\n" + _hits_text(r["durable"])
@@ -65,7 +72,8 @@ def call_tool(name, args):
     if name == "memory_promote":
         from layers.cognee_layer import CogneeLayer
         import promote
-        fresh = promote.promote(CogneeLayer(), project=project)
+        batch_limit = int(args.get("limit", 20) or 20)
+        fresh = promote.promote(CogneeLayer(), project=project, limit=batch_limit)
         return f"promoted {len(fresh)} items"
     raise ValueError(f"unknown tool {name}")
 
@@ -93,6 +101,8 @@ def main():
                 reply(mid, {"protocolVersion": "2024-11-05",
                             "capabilities": {"tools": {}},
                             "serverInfo": {"name": "agent-memory", "version": "0.1.0"}})
+            elif method == "ping":
+                reply(mid, {})
             elif method == "tools/list":
                 reply(mid, {"tools": TOOLS})
             elif method == "tools/call":
