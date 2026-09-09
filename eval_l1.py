@@ -36,22 +36,27 @@ def norm(s):
     return re.sub(r"[^a-z0-9]", "", str(s).lower())
 
 
-layers = {}
-rows = []
-for proj, q, exp in QUESTIONS:
-    layers.setdefault(proj, ClaudeMemLayer(project=proj))
-    t = time.perf_counter()
-    hits = layers[proj].search(q, limit=5)
-    lat = round(time.perf_counter() - t, 2)
-    blob = norm(" ".join(h.text for h in hits))
-    ok = all(norm(e) in blob for e in exp)
-    rows.append({"q": q, "ok": ok, "lat": lat})
-    print(f"{'PASS' if ok else 'FAIL'} {lat:5.2f}s :: {q[:60]}", flush=True)
+def main():
+    layers = {}
+    rows = []
+    for proj, q, exp in QUESTIONS:
+        layers.setdefault(proj, ClaudeMemLayer(project=proj))
+        t = time.perf_counter()
+        hits = layers[proj].search(q, limit=5)
+        lat = round(time.perf_counter() - t, 2)
+        blob = norm(" ".join(h.text for h in hits))
+        ok = all(norm(e) in blob for e in exp)
+        rows.append({"q": q, "ok": ok, "lat": lat})
+        print(f"{'PASS' if ok else 'FAIL'} {lat:5.2f}s :: {q[:60]}", flush=True)
 
-acc = sum(r["ok"] for r in rows) / len(rows)
-mean = sum(r["lat"] for r in rows) / len(rows)
-print(f"\nL1: {sum(r['ok'] for r in rows)}/{len(rows)} = {acc:.0%}, mean {mean:.2f}s")
-json.dump(rows, open("results_l1.json", "w"), indent=1)
-for r in rows:
-    if not r["ok"]:
-        print("MISS:", r["q"])
+    acc = sum(r["ok"] for r in rows) / len(rows)
+    mean = sum(r["lat"] for r in rows) / len(rows)
+    print(f"\nL1: {sum(r['ok'] for r in rows)}/{len(rows)} = {acc:.0%}, mean {mean:.2f}s")
+    json.dump(rows, open("results_l1.json", "w"), indent=1)
+    for r in rows:
+        if not r["ok"]:
+            print("MISS:", r["q"])
+
+
+if __name__ == "__main__":
+    main()

@@ -53,17 +53,33 @@ class ClaudeMemLayer(MemoryLayer):
             return []
 
     def _via_worker(self, query: str, limit: int) -> list[Hit]:
-        q = urllib.parse.urlencode({"query": query, "limit": limit})
+        params = {"query": query, "limit": limit}
+        if self.project:
+            params["project"] = self.project
+        q = urllib.parse.urlencode(params)
         with urllib.request.urlopen(f"{self.worker}/api/search/observations?{q}",
                                     timeout=15) as r:
             body = json.load(r)
         index = "".join(c.get("text", "") for c in body.get("content", []))
         ids = re.findall(r"#(\d+)", index)
         if not ids:
+            tokens = [t for t in re.findall(r"[a-z0-9]+", query.lower())
+                      if len(t) > 2 and t not in STOPWORDS]
+            if tokens:
+                params["query"] = " ".join(tokens[:5])
+                q = urllib.parse.urlencode(params)
+                with urllib.request.urlopen(f"{self.worker}/api/search/observations?{q}",
+                                            timeout=15) as r:
+                    body = json.load(r)
+                index = "".join(c.get("text", "") for c in body.get("content", []))
+                ids = re.findall(r"#(\d+)", index)
+        if not ids:
             return []
         return self._bodies_by_id(ids)
 
     def _bodies_by_id(self, ids: list[str]) -> list[Hit]:
+        if not ids:
+            return []
         con = sqlite3.connect(f"file:{DB}?mode=ro", uri=True)
         ph = ",".join("?" for _ in ids)
         sql = ("SELECT id, project, title, facts, narrative FROM observations "
@@ -74,8 +90,11 @@ class ClaudeMemLayer(MemoryLayer):
             args.append(self.project)
         rows = con.execute(sql, args).fetchall()
         con.close()
-        return [Hit(text=f"#{i} [{p}] {t}: {f} {n}", source=self.name, ref=str(i))
-                for i, p, t, f, n in rows]
+        by_id = {
+            str(i): Hit(text=f"#{i} [{p}] {t}: {f} {n}", source=self.name, ref=str(i))
+            for i, p, t, f, n in rows
+        }
+        return [by_id[str(i)] for i in ids if str(i) in by_id]
 
     def _via_sqlite(self, query: str, limit: int) -> list[Hit]:
         tokens = [t for t in re.findall(r"[a-z0-9]+", query.lower())

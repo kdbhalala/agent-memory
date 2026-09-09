@@ -60,4 +60,15 @@ fake = FakeL2()
 fresh = promote.promote(fake)
 assert len(fresh) == len(cands) and len(getattr(fake, "added", [])) == len(cands)
 assert promote.promote(fake) == [], "second run must promote nothing"
+
+# _bodies_by_id preserves rank order
+from layers.claudemem import ClaudeMemLayer
+cm = ClaudeMemLayer()
+test_ids = ["13891", "13791"]
+h_order = cm._bodies_by_id(test_ids)
+assert [h.ref for h in h_order] == test_ids, f"Order mismatch: {[h.ref for h in h_order]} vs {test_ids}"
+rev_ids = ["13791", "13891"]
+h_rev = cm._bodies_by_id(rev_ids)
+assert [h.ref for h in h_rev] == rev_ids, f"Reversed order mismatch: {[h.ref for h in h_rev]} vs {rev_ids}"
+
 print("layers OK")

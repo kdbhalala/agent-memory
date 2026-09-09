@@ -2,51 +2,51 @@
  {
   "q": "What was decided about haptics, service or functions?",
   "ok": true,
-  "lat": 1.87
+  "lat": 0.03
  },
  {
   "q": "What is the rule about dart format?",
   "ok": true,
-  "lat": 0.18
+  "lat": 0.02
  },
  {
   "q": "What went wrong with bare dart format lib?",
   "ok": true,
-  "lat": 0.17
+  "lat": 0.02
  },
  {
   "q": "TapArea for custom widgets, what about lgw primitives?",
   "ok": true,
-  "lat": 0.17
+  "lat": 0.01
  },
  {
   "q": "What is the audit-agent-stale-baseline pattern?",
   "ok": true,
-  "lat": 0.18
+  "lat": 0.02
  },
  {
   "q": "What is Legix phase 1 scope?",
   "ok": true,
-  "lat": 0.17
+  "lat": 0.02
  },
  {
   "q": "Should Form 16 be a separate screen in Legix?",
   "ok": true,
-  "lat": 0.17
+  "lat": 0.02
  },
  {
   "q": "Is Legix the ledger or a feeder into Tally?",
   "ok": true,
-  "lat": 0.17
+  "lat": 0.01
  },
  {
   "q": "What intake file types does Legix accept?",
-  "ok": false,
-  "lat": 0.17
+  "ok": true,
+  "lat": 0.02
  },
  {
   "q": "Ledger vs computation: what is the phase-1 artifact?",
   "ok": true,
-  "lat": 0.16
+  "lat": 0.01
  }
 ]
