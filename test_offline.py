@@ -70,8 +70,8 @@ batch = promote.promote(fake_ltd, limit=5)
 assert len(batch) == 5 and len(fake_ltd.added) == 5, f"Expected 5 promoted, got {len(batch)}"
 
 # _bodies_by_id preserves rank order
-from layers.claudemem import ClaudeMemLayer
-cm = ClaudeMemLayer()
+from layers.session_layer import SessionLayer
+cm = SessionLayer()
 test_ids = ["13891", "13791"]
 h_order = cm._bodies_by_id(test_ids)
 assert [h.ref for h in h_order] == test_ids, f"Order mismatch: {[h.ref for h in h_order]} vs {test_ids}"
@@ -91,14 +91,14 @@ with tempfile.NamedTemporaryFile(suffix=".db") as tmp:
         generated_by_model TEXT, relevance_count INT, sync_rev TEXT
     )""")
     con.close()
-    import layers.claudemem
-    orig_db = layers.claudemem.DB
-    layers.claudemem.DB = tmp_db
-    mock_cm = ClaudeMemLayer(worker="http://127.0.0.1:99999")  # dead worker port forces SQLite
+    import layers.session_layer
+    orig_db = layers.session_layer.DB
+    layers.session_layer.DB = tmp_db
+    mock_cm = SessionLayer(worker="http://127.0.0.1:99999")  # dead worker port forces SQLite
     rec = mock_cm.record("Test pattern offline", title="Test Pattern", project="offline-proj")
     assert rec["id"] == 1, f"Expected id 1, got {rec}"
     assert "SQLite" in rec["message"]
-    layers.claudemem.DB = orig_db
+    layers.session_layer.DB = orig_db
 
 # test integrate.py logic
 import integrate

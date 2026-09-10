@@ -3,7 +3,7 @@
 Exposes the two-layer framework to any MCP-capable coding agent:
   memory_recall        L1 session memory (fast, zero tokens server-side)
   memory_recall_deep   L1 + L2 durable knowledge (falls back to L1 alone)
-  memory_promote       curate durable items L1 -> L2 (needs cognee + LLM)
+  memory_promote       curate durable items L1 -> L2 (native knowledge graph)
 
 Run:  python3 mcp_server.py   (spawned by the agent with any cwd)
 """
@@ -13,7 +13,7 @@ import sys
 sys.path.insert(0, __file__.rsplit("/", 1)[0])
 
 from layers.base import MemoryLayer  # noqa: F401
-from layers.claudemem import ClaudeMemLayer
+from layers.session_layer import SessionLayer
 from recall import recall
 
 TOOLS = [
@@ -54,7 +54,7 @@ def _hits_text(hits):
 def call_tool(name, args):
     project = args.get("project")
     limit = int(args.get("limit", 5) or 5)
-    l1 = ClaudeMemLayer(project=project)
+    l1 = SessionLayer(project=project)
     if name == "memory_recall":
         query = str(args.get("query", "")).strip()
         if not query:
@@ -68,11 +68,7 @@ def call_tool(name, args):
             from layers.graph_layer import GraphLayer
             l2: MemoryLayer | None = GraphLayer(project=project)
         except Exception:
-            try:
-                from layers.cognee_layer import CogneeLayer
-                l2 = CogneeLayer()
-            except Exception:
-                l2 = None
+            l2 = None
         r = recall(query, l1, l2, limit=limit, deep=True)
         out = "## recent\n" + _hits_text(r["recent"])
         if r["durable"]:
@@ -129,7 +125,7 @@ def main():
                 try:
                     text = call_tool(p.get("name", ""), p.get("arguments", {}))
                     reply(mid, {"content": [{"type": "text", "text": text}]})
-                except RuntimeError as e:  # e.g. cognee not installed
+                except RuntimeError as e:
                     reply(mid, {"content": [{"type": "text", "text": f"unavailable: {e}"}],
                                       "isError": True})
             elif mid is not None and not method.startswith("notifications/"):

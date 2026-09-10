@@ -3,8 +3,8 @@
 Turnkey cross-agent memory integration for leading AI coding CLIs and IDEs.
 
 `agent-memory` exposes a unified Model Context Protocol (MCP) server that connects your AI coding assistants to a shared two-layer memory backend:
-- **L1 (`claude-mem`)**: Rapid, zero-token session working memory (<0.1s). Captures recent decisions, bugfixes, tool executions, and file-level constraints.
-- **L2 (`cognee`)**: Durable semantic knowledge graph for architectural principles, long-term trade-offs, and cross-project rules.
+- **L1 Working Memory (`SessionLayer`)**: Rapid, zero-token session working memory (<2ms via SQLite FTS5). Captures recent decisions, bugfixes, tool executions, and file-level constraints.
+- **L2 Knowledge Graph (`GraphLayer`)**: Native SQLite knowledge graph with multi-hop recursive traversal (<0.35ms) for architectural principles, long-term trade-offs, and cross-project rules.
 
 All tools share the same memory: an architectural pattern recorded in Claude Code is instantly recallable in Cursor, Codex, OpenCode, Antigravity, or Aider.
 
@@ -68,7 +68,7 @@ Every integrated tool gains access to four tools:
 | `memory_recall` | Fast L1 working memory search | `{"query": "auth migration", "project": "my-app"}` |
 | `memory_recall_deep` | Deep L1 + L2 knowledge graph search | `{"query": "state management architecture"}` |
 | `memory_record` | Record verified decisions & patterns | `{"text": "Always pass project parameter to worker HTTP search", "title": "Worker search scoping"}` |
-| `memory_promote` | Curate session learnings into L2 Cognee | `{"project": "my-app", "limit": 20}` |
+| `memory_promote` | Curate session learnings into L2 Knowledge Graph | `{"project": "my-app", "limit": 20}` |
 
 ---
 
@@ -322,4 +322,4 @@ MCP gives an agent *access* to tools, but large language models do not instincti
 By injecting the **Agent Memory Discipline** rules:
 1. **Zero Hallucinated Conventions**: The model actively queries `memory_recall` before making assumptions about project patterns or test setups.
 2. **Immediate Cross-Tool Sync**: When an agent settles a pattern or fixes a non-trivial bug, it calls `memory_record`. The fix is immediately indexed into SQLite FTS and Chroma, making it instantly discoverable by all other agents.
-3. **Architectural Permanence**: High-signal decisions can be curated into Cognee L2 (`memory_promote`), preserving context across weeks and months.
+3. **Architectural Permanence**: High-signal decisions can be curated into L2 Knowledge Graph (`memory_promote`), preserving context across weeks and months.

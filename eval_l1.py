@@ -8,7 +8,7 @@ import tempfile
 import time
 from pathlib import Path
 
-from layers.claudemem import ClaudeMemLayer
+from layers.session_layer import SessionLayer
 
 SAMPLE_DATA = [
     ("mobile-app", "Haptics Architecture", "Decided to use two tiny free functions (hapticTap, hapticToggle) rather than a service provider or singleton."),
@@ -48,14 +48,14 @@ def main():
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         eval_db = Path(args.db) if args.db else Path(tmp_dir) / "eval_l1.db"
-        cm_seed = ClaudeMemLayer(worker="http://127.0.0.1:99999", db_path=eval_db)
+        cm_seed = SessionLayer(worker="http://127.0.0.1:99999", db_path=eval_db)
         for proj, title, text in SAMPLE_DATA:
             cm_seed.record(text=text, title=title, project=proj)
 
         layers = {}
         rows = []
         for proj, q, exp in QUESTIONS:
-            layers.setdefault(proj, ClaudeMemLayer(worker="http://127.0.0.1:99999", project=proj, db_path=eval_db))
+            layers.setdefault(proj, SessionLayer(worker="http://127.0.0.1:99999", project=proj, db_path=eval_db))
             t = time.perf_counter()
             hits = layers[proj].search(q, limit=5)
             lat = round(time.perf_counter() - t, 4)

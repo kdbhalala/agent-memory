@@ -1,4 +1,4 @@
-"""Tiered recall: L1 (claude-mem) first, L2 (cognee) only when needed.
+"""Tiered recall: L1 (SessionLayer) first, L2 (GraphLayer) only when needed.
 
 Token-efficient by default: L1 returns a compact index; L2 is skipped
 unless deep=True or L1 comes back thin.
@@ -28,27 +28,18 @@ def recall(query: str, l1: MemoryLayer, l2: MemoryLayer | None = None,
 
 if __name__ == "__main__":
     import argparse
-    from layers.claudemem import ClaudeMemLayer
+    from layers.session_layer import SessionLayer
+    from layers.graph_layer import GraphLayer
 
     parser = argparse.ArgumentParser(description="Recall from agent session & durable memory.")
     parser.add_argument("query", help="Query text or keywords")
     parser.add_argument("--project", "-p", default=None, help="Filter by project name")
     parser.add_argument("--limit", "-l", type=int, default=5, help="Hit limit (default 5)")
     parser.add_argument("--deep", "-d", action="store_true", help="Force deep recall from durable layer")
-    parser.add_argument("--cognee", action="store_true", help="Use Cognee instead of native SQLite graph")
     args = parser.parse_args()
 
-    l1 = ClaudeMemLayer(project=args.project)
-    l2 = None
-    if args.cognee:
-        try:
-            from layers.cognee_layer import CogneeLayer
-            l2 = CogneeLayer()
-        except Exception as exc:
-            print(f"(note: Cognee unavailable: {exc})")
-    else:
-        from layers.graph_layer import GraphLayer
-        l2 = GraphLayer(project=args.project)
+    l1 = SessionLayer(project=args.project)
+    l2 = GraphLayer(project=args.project)
 
     res = recall(args.query, l1, l2, limit=args.limit, deep=args.deep)
     print(f"## recent ({len(res['recent'])})")

@@ -1,6 +1,6 @@
 """Promote durable knowledge L1 -> L2. Reads claude-mem SQLite directly
 (zero tokens, no worker needed), keeps only durable signals, dedupes via
-state file. Pass any object with .add(text) as l2 (CogneeLayer or fake).
+state file. Pass any object with .add(text) as l2 (GraphLayer or fake).
 """
 import hashlib
 import json
@@ -8,7 +8,7 @@ import os
 import sqlite3
 from pathlib import Path
 
-from layers.claudemem import get_default_db
+from layers.session_layer import get_default_db
 
 DB = get_default_db()
 STATE = Path(__file__).parent / "promoted.json"
@@ -85,8 +85,6 @@ if __name__ == "__main__":
                         help="Preview candidates without invoking L2 or modifying state")
     parser.add_argument("--limit", "-l", type=int, default=None,
                         help="Max items to promote/preview")
-    parser.add_argument("--cognee", action="store_true",
-                        help="Use legacy Cognee instead of native SQLite knowledge graph")
     args = parser.parse_args()
 
     seen = _load_state()
@@ -108,13 +106,7 @@ if __name__ == "__main__":
         if not fresh:
             print("Nothing new to promote.")
         else:
-            if args.cognee:
-                from layers.cognee_layer import CogneeLayer
-                l2 = CogneeLayer()
-                label = "Cognee"
-            else:
-                from layers.graph_layer import GraphLayer
-                l2 = GraphLayer(project=args.project)
-                label = "native SQLite knowledge graph"
+            from layers.graph_layer import GraphLayer
+            l2 = GraphLayer(project=args.project)
             promoted = promote(l2, project=args.project, limit=args.limit)
-            print(f"Successfully promoted {len(promoted)} item(s) to {label}.")
+            print(f"Successfully promoted {len(promoted)} item(s) to native knowledge graph.")

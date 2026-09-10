@@ -1,8 +1,7 @@
-"""L1: claude-mem session memory via local worker HTTP (read-only).
+"""L1: Working session memory via SQLite FTS5 with optional worker HTTP fallback.
 
-Two-step, token-efficient: worker returns a compact index table first,
-then full bodies are fetched from local SQLite by ID. Falls back to
-direct SQLite FTS if the worker is down.
+Two-step, token-efficient: queries local SQLite FTS5 index directly (<2ms)
+or queries local worker HTTP if available. Self-bootstraps schema on first run.
 """
 import json
 import re
@@ -37,8 +36,8 @@ STOPWORDS = frozenset(
 )
 
 
-class ClaudeMemLayer(MemoryLayer):
-    name = "claude-mem"
+class SessionLayer(MemoryLayer):
+    name = "session"
 
     def __init__(self, worker: str = WORKER, project: str | None = None,
                  db_path: Path | str | None = None):
@@ -231,3 +230,7 @@ class ClaudeMemLayer(MemoryLayer):
 
     def add(self, text: str) -> None:
         self.record(text)
+
+
+# Backward compatibility alias
+ClaudeMemLayer = SessionLayer

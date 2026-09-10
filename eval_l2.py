@@ -1,5 +1,5 @@
 """L2 Knowledge Graph evaluation: ingests curated durable items, quizzes single and multi-hop.
-Zero tokens on native GraphLayer (SQLite CTEs). Supports --cognee for legacy benchmarking.
+Zero tokens on native GraphLayer (SQLite CTEs).
 """
 import argparse
 import re
@@ -40,7 +40,6 @@ def norm(s):
 
 def main():
     parser = argparse.ArgumentParser(description="Evaluate L2 Durable Knowledge Graph retrieval.")
-    parser.add_argument("--cognee", action="store_true", help="Run against Cognee instead of native SQLite graph")
     args = parser.parse_args()
 
     with tempfile.TemporaryDirectory() as tmp_dir:

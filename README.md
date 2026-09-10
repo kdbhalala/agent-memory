@@ -63,7 +63,7 @@ graph TD
     L1 -. "Curated Promotion (promote.py)" .-> L2
 ```
 
-1. **L1 Working Memory (`layers/claudemem.py`)**:
+1. **L1 Working Memory (`layers/session_layer.py`)**:
    - Sub-2ms full-text search with BM25 ranking over recent session observations and tool fixes.
    - Automatically self-bootstraps SQLite schema and triggers on first read/write.
    - Fully compatible with `claude-mem` worker if present, but requires zero daemons to operate.
@@ -150,11 +150,11 @@ python promote.py --project my-app --limit 20
 ## Python API
 
 ```python
-from layers.claudemem import ClaudeMemLayer
+from layers.session_layer import SessionLayer
 from layers.graph_layer import GraphLayer
 from recall import recall
 
-l1 = ClaudeMemLayer(project="my-app")
+l1 = SessionLayer(project="my-app")
 l2 = GraphLayer(project="my-app")
 
 # Save a decision (instantly queryable across all CLI tools)

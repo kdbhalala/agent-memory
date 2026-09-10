@@ -19,9 +19,6 @@ classifiers = [
 ]
 dependencies = []
 
-[project.optional-dependencies]
-cognee = ["cognee"]
-
 [project.scripts]
 agent-memory = "mcp_server:main"
 agent-integrate = "integrate:main"
