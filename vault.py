@@ -16,11 +16,24 @@ import sqlite3
 import time
 from typing import Any, Dict, List, Optional, Set, Tuple
 
-DATA_DIR = Path(os.environ.get("AGENT_MEMORY_DIR", Path.home() / ".agent-memory"))
-VAULT_DIR = Path(os.environ.get("AGENT_MEMORY_VAULT", DATA_DIR / "vault"))
-SESSION_DB = Path(os.environ.get("AGENT_MEMORY_DB", DATA_DIR / "memory.db"))
-GRAPH_DB = Path(os.environ.get("AGENT_MEMORY_GRAPH_DB", DATA_DIR / "memory.db"))
-LEGACY_CLAUDE_MEM_DB = Path.home() / ".claude-mem" / "claude-mem.db"
+from config import (
+    CLAUDE_MEM_DB,
+    DATA_DIR,
+    DEFAULT_DB,
+    DEFAULT_STATE_FILE,
+    GRAPH_DB,
+    LEGACY_CLAUDE_MEM_DB,
+    SESSION_DB,
+    SYNC_CONFIG_FILE,
+    VAULT_DIR,
+    get_data_dir,
+    get_default_db,
+    get_graph_db,
+    get_state_path,
+    get_vault_dir,
+)
+from layers.session_layer import SessionLayer, add_record_listener, remove_record_listener
+from layers.graph_layer import GraphLayer, add_edge_listener, remove_edge_listener
 
 NO_SIGNAL_PATTERN = re.compile(
     r"^(none[\s,]*)+$|no (?:new |technical )*(patterns|learnings|work|changes)|"
@@ -28,17 +41,6 @@ NO_SIGNAL_PATTERN = re.compile(
     r"no work has been performed",
     re.I
 )
-
-
-def get_data_dir() -> Path:
-    DATA_DIR.mkdir(parents=True, exist_ok=True)
-    return DATA_DIR
-
-
-def get_vault_dir(vault_dir: Path | str | None = None) -> Path:
-    target = Path(vault_dir) if vault_dir else VAULT_DIR
-    target.mkdir(parents=True, exist_ok=True)
-    return target
 
 
 def compute_guid(project: str, title: str, text: str, extra: str = "") -> str:
@@ -208,6 +210,38 @@ def append_edge_to_vault(edge_dict: dict, vault_dir: Path | str | None = None) -
         return False
 
 
+def _vault_on_record(obs_dict: dict) -> None:
+    """Callback triggered on SessionLayer.record to persist observation to vault."""
+    try:
+        append_observation_to_vault(obs_dict)
+    except Exception:
+        pass
+
+
+def _vault_on_edge(edge_dict: dict) -> None:
+    """Callback triggered on GraphLayer.add_edge to persist edge to vault."""
+    try:
+        append_edge_to_vault(edge_dict)
+    except Exception:
+        pass
+
+
+def enable_vault_listeners() -> None:
+    """Enable automatic appending of records and edges to vault."""
+    add_record_listener(_vault_on_record)
+    add_edge_listener(_vault_on_edge)
+
+
+def disable_vault_listeners() -> None:
+    """Disable automatic appending of records and edges to vault."""
+    remove_record_listener(_vault_on_record)
+    remove_edge_listener(_vault_on_edge)
+
+
+# Automatically register vault listeners on module import
+enable_vault_listeners()
+
+
 def export_dirty_to_vault(
     vault_dir: Path | str | None = None,
     session_db: Path | str | None = None,
@@ -360,7 +394,6 @@ def import_from_vault(
     # 1. Import observations into session_db
     obs_file = v_dir / "observations.jsonl"
     if obs_file.exists():
-        from layers.session_layer import SessionLayer
         SessionLayer._init_db(s_db)
 
         con = sqlite3.connect(s_db)
@@ -424,7 +457,6 @@ def import_from_vault(
     # 2. Import graph nodes and edges into graph_db
     graph_file = v_dir / "graph.jsonl"
     if graph_file.exists():
-        from layers.graph_layer import GraphLayer
         gl = GraphLayer(db_path=g_db)
 
         con = sqlite3.connect(g_db)

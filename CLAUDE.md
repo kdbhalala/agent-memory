@@ -13,6 +13,7 @@ When operating in this codebase:
 
 ## Project Structure & Navigation
 
+- `config.py`: Single Source of Truth (SSoT) for paths, directories, and environment variable resolution.
 - `layers/session_layer.py`: L1 Working Memory (SQLite FTS5 with BM25 ranking, <2ms) & Core Memory blocks.
 - `layers/graph_layer.py`: L2 Knowledge Graph (SQLite recursive CTEs, <0.5ms), Bi-Temporal Edges & Entity Aliases.
 - `vault.py`: Canonical Git-friendly append-only JSONL vault (`~/.agent-memory/vault/`) & deduplication engine.

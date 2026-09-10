@@ -632,6 +632,70 @@ with tempfile.TemporaryDirectory() as hook_tmp:
     finally:
         os.chdir(orig_cwd)
 
+# 11. Test Modularity, Config SSoT, and Event Listener Decoupling
+with tempfile.TemporaryDirectory() as mod_tmp:
+    m_dir = Path(mod_tmp)
+    m_db = m_dir / "mod_test.db"
+    m_vault = m_dir / "mod_vault"
+
+    import config
+    assert hasattr(config, "DATA_DIR")
+    assert hasattr(config, "VAULT_DIR")
+    assert hasattr(config, "DEFAULT_DB")
+    assert hasattr(config, "get_default_db")
+    assert hasattr(config, "get_vault_dir")
+
+    # Verify layers source code contains no imports of vault or sync
+    import inspect
+    import layers.session_layer as sl_mod
+    import layers.graph_layer as gl_mod
+
+    sl_src = inspect.getsource(sl_mod)
+    gl_src = inspect.getsource(gl_mod)
+    assert "import vault" not in sl_src and "from vault" not in sl_src, "session_layer must not import vault"
+    assert "import sync" not in sl_src and "from sync" not in sl_src, "session_layer must not import sync"
+    assert "import vault" not in gl_src and "from vault" not in gl_src, "graph_layer must not import vault"
+    assert "import sync" not in gl_src and "from sync" not in gl_src, "graph_layer must not import sync"
+
+    # Test SessionLayer on_record callback and listeners
+    from layers.session_layer import SessionLayer, add_record_listener, remove_record_listener
+    rec_events = []
+    global_events = []
+
+    def test_listener(payload: dict) -> None:
+        global_events.append(payload)
+
+    add_record_listener(test_listener)
+    sl = SessionLayer(db_path=m_db, on_record=lambda p: rec_events.append(p))
+    res = sl.record("Modularity test observation", title="Mod Title", project="mod-proj")
+    assert len(rec_events) == 1
+    assert rec_events[0]["title"] == "Mod Title"
+    assert rec_events[0]["id"] == res["id"]
+    assert len(global_events) == 1
+
+    remove_record_listener(test_listener)
+    sl.record("Second observation after remove", title="Mod Title 2", project="mod-proj")
+    assert len(global_events) == 1  # Unregistered listener not called
+
+    # Test GraphLayer on_edge callback and listeners
+    from layers.graph_layer import GraphLayer, add_edge_listener, remove_edge_listener
+    edge_events = []
+    global_edges = []
+
+    def test_edge_listener(payload: dict) -> None:
+        global_edges.append(payload)
+
+    add_edge_listener(test_edge_listener)
+    gl = GraphLayer(db_path=m_db, on_edge=lambda p: edge_events.append(p))
+    gl.add_edge("ModA", "CONNECTS", "ModB", "ModA connects to ModB", project="mod-proj")
+    assert len(edge_events) == 1
+    assert edge_events[0]["source"] == "ModA"
+    assert len(global_edges) == 1
+
+    remove_edge_listener(test_edge_listener)
+    gl.add_edge("ModB", "CONNECTS", "ModC", "ModB connects to ModC", project="mod-proj")
+    assert len(global_edges) == 1  # Unregistered listener not called
+
 print("layers OK")
 print("integrate tests OK")
 print("graph tests OK")
@@ -642,3 +706,4 @@ print("core memory blocks OK")
 print("auto promote OK")
 print("bi-temporal graph and canonicalization OK")
 print("lifecycle hooks OK")
+print("modularity & event listener decoupling OK")

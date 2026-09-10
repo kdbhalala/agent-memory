@@ -24,17 +24,15 @@ if hasattr(sys.stdout, "reconfigure"):
         pass
 
 
+from config import DATA_DIR, SYNC_CONFIG_FILE, VAULT_DIR, get_vault_dir
+from layers.session_layer import add_record_listener, remove_record_listener
+from layers.graph_layer import add_edge_listener, remove_edge_listener
 from vault import (
-    DATA_DIR,
-    VAULT_DIR,
     deduplicate_and_compact,
     export_dirty_to_vault,
-    get_vault_dir,
     import_from_vault,
     init_vault,
 )
-
-SYNC_CONFIG_FILE = DATA_DIR / "sync.json"
 DEDUPE_INTERVAL_SECONDS = 7 * 24 * 3600  # 7 days
 DEDUPE_COUNT_THRESHOLD = 50  # auto-dedupe after 50 new observations
 
@@ -366,6 +364,32 @@ def schedule_auto_sync(vault_dir: Path | str | None = None, delay_seconds: float
     _debounce_timer = threading.Timer(delay_seconds, _worker)
     _debounce_timer.daemon = True
     _debounce_timer.start()
+
+
+def _sync_on_record(obs_dict: dict) -> None:
+    """Callback triggered on SessionLayer.record to schedule debounced auto-sync."""
+    schedule_auto_sync()
+
+
+def _sync_on_edge(edge_dict: dict) -> None:
+    """Callback triggered on GraphLayer.add_edge to schedule debounced auto-sync."""
+    schedule_auto_sync()
+
+
+def enable_sync_listeners() -> None:
+    """Enable debounced auto-sync triggers on record and edge events."""
+    add_record_listener(_sync_on_record)
+    add_edge_listener(_sync_on_edge)
+
+
+def disable_sync_listeners() -> None:
+    """Disable debounced auto-sync triggers."""
+    remove_record_listener(_sync_on_record)
+    remove_edge_listener(_sync_on_edge)
+
+
+# Automatically register sync listeners on module import
+enable_sync_listeners()
 
 
 def sync_status() -> dict[str, Any]:

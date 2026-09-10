@@ -30,8 +30,10 @@ import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
+from config import DATA_DIR
+
 REPO_DIR = Path(__file__).resolve().parent
-DEFAULT_HOOKS_DIR = Path.home() / ".agent-memory" / "hooks"
+DEFAULT_HOOKS_DIR = DATA_DIR / "hooks"
 
 
 def detect_python() -> str:

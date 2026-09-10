@@ -8,18 +8,9 @@ import os
 import sqlite3
 from pathlib import Path
 
-from layers.session_layer import get_default_db
+from config import get_default_db, get_state_path
 
 DB = get_default_db()
-def get_state_path() -> Path:
-    env = os.environ.get("AGENT_MEMORY_STATE")
-    if env:
-        return Path(env)
-    vault_state = Path.home() / ".agent-memory" / "vault" / "promoted.json"
-    if vault_state.parent.exists():
-        return vault_state
-    return Path.home() / ".agent-memory" / "promoted.json"
-
 STATE = get_state_path()
 DURABLE_TYPES = {"decision", "bugfix", "feature"}
 DURABLE_CONCEPTS = {"why-it-exists", "pattern", "gotcha", "trade-off", "how-it-works"}

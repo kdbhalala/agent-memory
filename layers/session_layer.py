@@ -3,28 +3,38 @@
 Two-step, token-efficient: queries local SQLite FTS5 index directly (<2ms)
 or queries local worker HTTP if available. Self-bootstraps schema on first run.
 """
+from __future__ import annotations
+
 import json
 import re
 import sqlite3
 import os
 from pathlib import Path
+from typing import Callable, Optional
 
 from .base import Hit, MemoryLayer
 
-CLAUDE_MEM_DB = Path.home() / ".claude-mem" / "claude-mem.db"
-DEFAULT_DB = Path.home() / ".agent-memory" / "memory.db"
-
-
-def get_default_db() -> Path:
-    env_path = os.getenv("AGENT_MEMORY_DB") or os.getenv("CLAUDE_MEM_DB")
-    if env_path:
-        return Path(env_path)
-    if CLAUDE_MEM_DB.exists():
-        return CLAUDE_MEM_DB
-    return DEFAULT_DB
-
+try:
+    from config import CLAUDE_MEM_DB, DEFAULT_DB, get_default_db
+except ImportError:
+    from ..config import CLAUDE_MEM_DB, DEFAULT_DB, get_default_db
 
 DB = get_default_db()
+
+OnRecordCallback = Callable[[dict], None]
+_RECORD_LISTENERS: list[OnRecordCallback] = []
+
+
+def add_record_listener(listener: OnRecordCallback) -> None:
+    """Register a callback to be invoked when an observation is recorded."""
+    if listener not in _RECORD_LISTENERS:
+        _RECORD_LISTENERS.append(listener)
+
+
+def remove_record_listener(listener: OnRecordCallback) -> None:
+    """Unregister a previously registered record callback."""
+    if listener in _RECORD_LISTENERS:
+        _RECORD_LISTENERS.remove(listener)
 
 
 STOPWORDS = frozenset(
@@ -37,10 +47,12 @@ class SessionLayer(MemoryLayer):
     name = "session"
 
     def __init__(self, worker: str | None = None, project: str | None = None,
-                 db_path: Path | str | None = None):
+                 db_path: Path | str | None = None,
+                 on_record: OnRecordCallback | None = None):
         self.worker = worker
         self.project = project
         self.db_path = Path(db_path) if db_path else get_default_db()
+        self.on_record = on_record
 
     @staticmethod
     def _init_db(db_path: Path) -> None:
@@ -291,33 +303,39 @@ class SessionLayer(MemoryLayer):
         con.commit()
         con.close()
 
-        # Fast append to vault (<0.1ms) and trigger debounced background sync
-        try:
-            from vault import append_observation_to_vault
-            from sync import schedule_auto_sync
-            append_observation_to_vault({
-                "memory_session_id": session_id,
-                "project": proj,
-                "type": cat,
-                "title": tit,
-                "subtitle": "Recorded via agent-memory",
-                "facts": json.dumps([text]),
-                "narrative": text,
-                "concepts": json.dumps([cat, "pattern"]),
-                "files_read": "[]",
-                "files_modified": "[]",
-                "prompt_number": 1,
-                "discovery_tokens": 0,
-                "created_at": now_iso,
-                "created_at_epoch": now_epoch,
-                "content_hash": content_hash,
-                "generated_by_model": "agent-memory",
-                "relevance_count": 0,
-                "sync_rev": "1"
-            })
-            schedule_auto_sync()
-        except Exception:
-            pass
+        obs_payload = {
+            "id": obs_id,
+            "memory_session_id": session_id,
+            "project": proj,
+            "type": cat,
+            "title": tit,
+            "subtitle": "Recorded via agent-memory",
+            "facts": json.dumps([text]),
+            "narrative": text,
+            "concepts": json.dumps([cat, "pattern"]),
+            "files_read": "[]",
+            "files_modified": "[]",
+            "prompt_number": 1,
+            "discovery_tokens": 0,
+            "created_at": now_iso,
+            "created_at_epoch": now_epoch,
+            "content_hash": content_hash,
+            "generated_by_model": "agent-memory",
+            "relevance_count": 0,
+            "sync_rev": "1"
+        }
+
+        # Dispatch to instance callback and registered listeners
+        if self.on_record:
+            try:
+                self.on_record(obs_payload)
+            except Exception:
+                pass
+        for listener in _RECORD_LISTENERS:
+            try:
+                listener(obs_payload)
+            except Exception:
+                pass
 
         filtered_conflicts = [
             c for c in conflicts

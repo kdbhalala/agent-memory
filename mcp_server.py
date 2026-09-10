@@ -20,6 +20,8 @@ sys.path.insert(0, __file__.rsplit("/", 1)[0])
 from layers.base import MemoryLayer  # noqa: F401
 from layers.session_layer import SessionLayer
 from recall import recall
+import sync
+import vault
 
 TOOLS = [
     {"name": "memory_recall",

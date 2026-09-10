@@ -15,12 +15,31 @@ import sqlite3
 import time
 import urllib.request
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 
 from .base import Hit, MemoryLayer
 
-DEFAULT_DB = Path.home() / ".agent-memory" / "memory.db"
-CLAUDE_MEM_DB = Path.home() / ".claude-mem" / "claude-mem.db"
+try:
+    from config import CLAUDE_MEM_DB, DEFAULT_DB, get_default_db
+except ImportError:
+    from ..config import CLAUDE_MEM_DB, DEFAULT_DB, get_default_db
+
+get_db_path = get_default_db
+
+OnEdgeCallback = Callable[[dict], None]
+_EDGE_LISTENERS: list[OnEdgeCallback] = []
+
+
+def add_edge_listener(listener: OnEdgeCallback) -> None:
+    """Register a callback to be invoked when an edge is added to the graph."""
+    if listener not in _EDGE_LISTENERS:
+        _EDGE_LISTENERS.append(listener)
+
+
+def remove_edge_listener(listener: OnEdgeCallback) -> None:
+    """Unregister a previously registered edge callback."""
+    if listener in _EDGE_LISTENERS:
+        _EDGE_LISTENERS.remove(listener)
 
 STANDARD_ALIASES: List[Tuple[str, str, str]] = [
     ("fcm", "FirebaseCloudMessaging", "messaging"),
@@ -71,22 +90,15 @@ def is_opposing_relation(r1: str, r2: str) -> bool:
     return False
 
 
-def get_db_path() -> Path:
-    env_path = os.getenv("AGENT_MEMORY_DB") or os.getenv("CLAUDE_MEM_DB")
-    if env_path:
-        return Path(env_path)
-    if CLAUDE_MEM_DB.exists():
-        return CLAUDE_MEM_DB
-    return DEFAULT_DB
-
-
 class GraphLayer(MemoryLayer):
     """Native SQLite Semantic Knowledge Graph layer for durable memory."""
     name = "graph"
 
-    def __init__(self, db_path: Path | str | None = None, project: str | None = None):
+    def __init__(self, db_path: Path | str | None = None, project: str | None = None,
+                 on_edge: OnEdgeCallback | None = None):
         self.db_path = Path(db_path) if db_path else get_db_path()
         self.project = project
+        self.on_edge = on_edge
         self._alias_cache: dict[str, str] = {}
         self._init_db()
 
@@ -363,24 +375,28 @@ class GraphLayer(MemoryLayer):
         con.commit()
         con.close()
 
-        # Fast append to vault (<0.1ms) and trigger debounced background sync
-        try:
-            from vault import append_edge_to_vault
-            from sync import schedule_auto_sync
-            append_edge_to_vault({
-                "source": s,
-                "relation": r,
-                "target": t,
-                "fact": f,
-                "project": proj,
-                "is_active": 1,
-                "valid_from": time.strftime("%Y-%m-%d %H:%M:%S"),
-                "valid_until": None,
-                "superseded_by": None
-            })
-            schedule_auto_sync()
-        except Exception:
-            pass
+        edge_payload = {
+            "source": s,
+            "relation": r,
+            "target": t,
+            "fact": f,
+            "project": proj,
+            "is_active": 1,
+            "valid_from": time.strftime("%Y-%m-%d %H:%M:%S"),
+            "valid_until": None,
+            "superseded_by": None
+        }
+
+        if self.on_edge:
+            try:
+                self.on_edge(edge_payload)
+            except Exception:
+                pass
+        for listener in _EDGE_LISTENERS:
+            try:
+                listener(edge_payload)
+            except Exception:
+                pass
 
     def add(self, text: str) -> None:
         """Extract entities and relations from text and ingest into the knowledge graph."""
