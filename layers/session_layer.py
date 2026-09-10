@@ -480,6 +480,95 @@ class SessionLayer(MemoryLayer):
             for r in rows
         ]
 
+    def get_observation(self, obs_id: int) -> dict | None:
+        """Fetch a single observation by ID, returning a structured dictionary."""
+        if not self.db_path.exists():
+            return None
+        con = sqlite3.connect(self.db_path)
+        cur = con.cursor()
+        try:
+            row = cur.execute("""
+                SELECT id, memory_session_id, project, type, title, subtitle,
+                       facts, narrative, concepts, files_read, files_modified,
+                       created_at, created_at_epoch, content_hash
+                FROM observations WHERE id = ?
+            """, (obs_id,)).fetchone()
+            if not row:
+                return None
+            return {
+                "id": row[0],
+                "memory_session_id": row[1],
+                "project": row[2],
+                "type": row[3],
+                "title": row[4],
+                "subtitle": row[5],
+                "facts": json.loads(row[6]) if row[6] and row[6].startswith("[") else [row[6]] if row[6] else [],
+                "narrative": row[7],
+                "concepts": json.loads(row[8]) if row[8] and row[8].startswith("[") else [] if row[8] else [],
+                "files_read": json.loads(row[9]) if row[9] and row[9].startswith("[") else [],
+                "files_modified": json.loads(row[10]) if row[10] and row[10].startswith("[") else [],
+                "created_at": row[11],
+                "created_at_epoch": row[12],
+                "content_hash": row[13],
+            }
+        finally:
+            con.close()
+
+    def delete_observation(self, obs_id: int, hard: bool = False) -> bool:
+        """Delete an observation by ID. Soft delete (marks superseded) by default, or hard delete."""
+        if not self.db_path.exists():
+            return False
+        con = sqlite3.connect(self.db_path)
+        cur = con.cursor()
+        try:
+            if hard:
+                cur.execute("DELETE FROM observations WHERE id = ?", (obs_id,))
+            else:
+                cur.execute("""
+                    UPDATE observations
+                    SET type = 'superseded',
+                        subtitle = COALESCE(subtitle, '') || ' [DELETED]'
+                    WHERE id = ? AND type != 'superseded'
+                """, (obs_id,))
+            con.commit()
+            return cur.rowcount > 0
+        finally:
+            con.close()
+
+    def list_observations(self, limit: int = 20, project: str | None = None,
+                          include_superseded: bool = False) -> list[dict]:
+        """List recent observations ordered by id DESC."""
+        if not self.db_path.exists():
+            return []
+        con = sqlite3.connect(self.db_path)
+        cur = con.cursor()
+        try:
+            sql = "SELECT id, project, type, title, subtitle, narrative, created_at FROM observations"
+            conditions = []
+            params: list[object] = []
+            if not include_superseded:
+                conditions.append("type != 'superseded'")
+            if project and project != "global":
+                conditions.append("project = ?")
+                params.append(project)
+            if conditions:
+                sql += " WHERE " + " AND ".join(conditions)
+            sql += " ORDER BY id DESC LIMIT ?"
+            params.append(limit)
+            rows = cur.execute(sql, params).fetchall()
+            return [{
+                "id": r[0],
+                "project": r[1],
+                "type": r[2],
+                "title": r[3],
+                "subtitle": r[4],
+                "narrative": r[5],
+                "created_at": r[6],
+            } for r in rows]
+        finally:
+            con.close()
+
 
 # Backward compatibility alias
 ClaudeMemLayer = SessionLayer
+

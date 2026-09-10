@@ -86,6 +86,13 @@ TOOLS = [
      "inputSchema": {"type": "object",
                      "properties": {"project": {"type": "string", "description": "Optional project filter"}},
                      "required": []}},
+    {"name": "memory_bootstrap",
+     "description": "Bootstrap and seed initial project memories from local Git history and README.md (solves cold-start on new projects).",
+     "inputSchema": {"type": "object",
+                     "properties": {"repo": {"type": "string", "description": "Repository path (default: .)", "default": "."},
+                                    "project": {"type": "string", "description": "Optional project name override"},
+                                    "max_commits": {"type": "integer", "default": 20, "description": "Max git commits to parse"}},
+                     "required": []}},
 ]
 
 
@@ -240,6 +247,23 @@ def call_tool(name, args):
         else:
             r = sync.sync(push=True, pull=True)
             return f"Sync complete. Status: {r['status']}. Committed: {r['committed']}, Pulled: {r['pulled']}, Pushed: {r['pushed']}."
+    if name == "memory_bootstrap":
+        import bootstrap
+        repo = str(args.get("repo", ".") or ".")
+        max_commits = int(args.get("max_commits", 20) or 20)
+        proj = args.get("project")
+        res = bootstrap.bootstrap_project(repo_dir=repo, max_commits=max_commits, project=proj)
+        cnt = res["created_count"]
+        p = res["project"]
+        if cnt == 0:
+            return f"Project '{p}' is already bootstrapped (no new memories added)."
+        parts = []
+        if res["readme_bootstrapped"]:
+            parts.append("1 README architecture")
+        if res["commits_bootstrapped"]:
+            parts.append(f"{res['commits_bootstrapped']} git commits")
+        detail = f" ({', '.join(parts)})" if parts else ""
+        return f"Bootstrapped {cnt} memories for project '{p}'{detail}."
     raise ValueError(f"unknown tool {name}")
 
 
@@ -294,6 +318,153 @@ def main():
                 reply(mid, error=e)
 
 
+def cmd_log(argv: list[str]) -> None:
+    import argparse
+    parser = argparse.ArgumentParser(prog="agent-memory log", description="List recent observations")
+    parser.add_argument("--limit", "-n", type=int, default=20, help="Max observations to display (default: 20)")
+    parser.add_argument("--project", "-p", default=None, help="Filter by project name")
+    parser.add_argument("--all", action="store_true", help="Include superseded observations")
+    args = parser.parse_args(argv)
+
+    l1 = SessionLayer(project=args.project)
+    obs = l1.list_observations(limit=args.limit, project=args.project, include_superseded=args.all)
+    if not obs:
+        print("(no observations found)")
+        return
+
+    print(f"{'ID':<6} {'DATE':<11} {'PROJECT':<16} {'TYPE':<14} {'TITLE'}")
+    print("-" * 80)
+    for o in obs:
+        d = (o.get("created_at") or "")[:10]
+        p = (o.get("project") or "")[:15]
+        t = (o.get("type") or "")[:13]
+        tit = o.get("title") or ""
+        if len(tit) > 42:
+            tit = tit[:39] + "..."
+        print(f"#{o['id']:<5} {d:<11} {p:<16} {t:<14} {tit}")
+
+
+def cmd_inspect(argv: list[str]) -> None:
+    if not argv or argv[0] in ("-h", "--help"):
+        print("Usage: agent-memory inspect <id>")
+        return
+    raw_id = argv[0].lstrip("#")
+    try:
+        obs_id = int(raw_id)
+    except ValueError:
+        print(f"Invalid observation ID: {argv[0]}")
+        return
+
+    l1 = SessionLayer()
+    o = l1.get_observation(obs_id)
+    if not o:
+        print(f"Observation #{obs_id} not found.")
+        return
+
+    print(f"=== Observation #{o['id']} ===")
+    print(f"Title:       {o['title']}")
+    print(f"Project:     {o['project']}")
+    print(f"Type:        {o['type']}")
+    print(f"Created:     {o['created_at']}")
+    if o.get("subtitle"):
+        print(f"Subtitle:    {o['subtitle']}")
+    if o.get("concepts"):
+        print(f"Concepts:    {', '.join(o['concepts'])}")
+    if o.get("facts"):
+        print("\nFacts:")
+        for f in o["facts"]:
+            print(f"  - {f}")
+    if o.get("narrative"):
+        print(f"\nNarrative:\n{o['narrative']}")
+
+
+def cmd_delete(argv: list[str]) -> None:
+    import argparse
+    parser = argparse.ArgumentParser(prog="agent-memory delete", description="Delete or supersede an observation")
+    parser.add_argument("id", help="Observation ID (#123 or 123)")
+    parser.add_argument("--hard", action="store_true", help="Permanently delete from database instead of soft-deleting")
+    args = parser.parse_args(argv)
+
+    raw_id = args.id.lstrip("#")
+    try:
+        obs_id = int(raw_id)
+    except ValueError:
+        print(f"Invalid observation ID: {args.id}")
+        return
+
+    l1 = SessionLayer()
+    ok = l1.delete_observation(obs_id, hard=args.hard)
+    if ok:
+        mode = "Permanently deleted" if args.hard else "Marked as superseded/deleted"
+        print(f"[✓] {mode} observation #{obs_id}.")
+    else:
+        print(f"[!] Observation #{obs_id} not found or already deleted.")
+
+
+def cmd_pin(argv: list[str]) -> None:
+    import argparse
+    parser = argparse.ArgumentParser(prog="agent-memory pin", description="Pin a critical rule or invariant to core memory")
+    parser.add_argument("key", help="Unique identifier for the block")
+    parser.add_argument("content", help="Rule or constraint content")
+    parser.add_argument("--category", "-c", default="system", help="Category (default: system)")
+    parser.add_argument("--project", "-p", default=None, help="Project name (default: global)")
+    args = parser.parse_args(argv)
+
+    l1 = SessionLayer(project=args.project)
+    res = l1.pin_block(key=args.key, content=args.content, category=args.category, project=args.project)
+    print(f"[✓] Pinned block [{res['key']}] ({res['category']}) to core memory.")
+
+
+def cmd_unpin(argv: list[str]) -> None:
+    if not argv or argv[0] in ("-h", "--help"):
+        print("Usage: agent-memory unpin <key>")
+        return
+    l1 = SessionLayer()
+    ok = l1.unpin_block(argv[0])
+    if ok:
+        print(f"[✓] Unpinned block [{argv[0]}] from core memory.")
+    else:
+        print(f"[!] Block [{argv[0]}] not found or already unpinned.")
+
+
+def cmd_blocks(argv: list[str]) -> None:
+    import argparse
+    parser = argparse.ArgumentParser(prog="agent-memory blocks", description="List core memory blocks")
+    parser.add_argument("--project", "-p", default=None, help="Filter by project")
+    args = parser.parse_args(argv)
+
+    l1 = SessionLayer(project=args.project)
+    blocks = l1.list_blocks(project=args.project)
+    if not blocks:
+        print("(no core memory blocks)")
+        return
+    print(f"{'KEY':<20} {'CATEGORY':<12} {'PROJECT':<14} {'STATUS':<10} {'CONTENT'}")
+    print("-" * 80)
+    for b in blocks:
+        k = b.get("key") or b.get("block_key", "")
+        cat = b.get("category", "system")
+        p = b.get("project", "global")
+        st = "pinned" if b.get("pinned") else "unpinned"
+        cnt = (b.get("content") or "").replace("\n", " ")
+        if len(cnt) > 35:
+            cnt = cnt[:32] + "..."
+        print(f"{k:<20} {cat:<12} {p:<14} {st:<10} {cnt}")
+
+
+def cmd_recall(argv: list[str]) -> None:
+    import argparse
+    parser = argparse.ArgumentParser(prog="agent-memory recall", description="Search working & durable memory")
+    parser.add_argument("query", help="Search query")
+    parser.add_argument("--project", "-p", default=None, help="Project name filter")
+    parser.add_argument("--deep", action="store_true", help="Search L2 knowledge graph as well")
+    parser.add_argument("--limit", "-n", type=int, default=5, help="Max hits to return (default: 5)")
+    args = parser.parse_args(argv)
+
+    tool_name = "memory_recall_deep" if args.deep else "memory_recall"
+    res = call_tool(tool_name, {"query": args.query, "project": args.project, "limit": args.limit})
+    print(res)
+
+
 if __name__ == "__main__":
     if len(sys.argv) > 1:
         cmd = sys.argv[1].lower()
@@ -302,14 +473,57 @@ if __name__ == "__main__":
             sys.argv = [sys.argv[0]] + sys.argv[2:]
             integrate.main()
             sys.exit(0)
-        elif cmd in ("hooks", "status", "install", "scaffold", "sync", "uninstall", "test", "generate"):
+        elif cmd in ("hooks", "status", "install", "scaffold", "uninstall", "test", "generate"):
             import integrate
             integrate.main()
+            sys.exit(0)
+        elif cmd == "sync":
+            if len(sys.argv) > 2 and sys.argv[2] in ("now", "dedupe", "init", "status"):
+                import sync
+                sys.argv = [sys.argv[0]] + sys.argv[2:]
+                sync.main()
+                sys.exit(0)
+            else:
+                import integrate
+                integrate.main()
+                sys.exit(0)
+        elif cmd == "bootstrap":
+            import bootstrap
+            bootstrap.main(sys.argv[2:])
+            sys.exit(0)
+        elif cmd == "log":
+            cmd_log(sys.argv[2:])
+            sys.exit(0)
+        elif cmd == "inspect":
+            cmd_inspect(sys.argv[2:])
+            sys.exit(0)
+        elif cmd == "delete":
+            cmd_delete(sys.argv[2:])
+            sys.exit(0)
+        elif cmd == "pin":
+            cmd_pin(sys.argv[2:])
+            sys.exit(0)
+        elif cmd == "unpin":
+            cmd_unpin(sys.argv[2:])
+            sys.exit(0)
+        elif cmd == "blocks":
+            cmd_blocks(sys.argv[2:])
+            sys.exit(0)
+        elif cmd == "recall":
+            cmd_recall(sys.argv[2:])
             sys.exit(0)
         elif cmd in ("-h", "--help", "help"):
             print("agent-memory: Zero-dependency two-layer AI memory framework with MCP server.\n")
             print("Usage:")
             print("  agent-memory                         Start MCP stdio server")
+            print("  agent-memory bootstrap [--repo .]    Bootstrap initial memories from Git & README")
+            print("  agent-memory log [--limit 20]        List recent observations")
+            print("  agent-memory inspect <id>            Inspect observation details and facts")
+            print("  agent-memory delete <id> [--hard]    Delete/supersede an observation")
+            print("  agent-memory recall <query>          Search working & durable memory")
+            print("  agent-memory pin <key> <content>     Pin critical invariant to core memory")
+            print("  agent-memory unpin <key>             Unpin block from core memory")
+            print("  agent-memory blocks                  List pinned core memory blocks")
             print("  agent-memory integrate [COMMAND ...] Assistant integration & project scaffolding")
             print("  agent-memory hooks [TOOLS ...]       Manage automated lifecycle hooks")
             print("  agent-memory status                  Show MCP integration status")

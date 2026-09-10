@@ -35,13 +35,14 @@ sys.path.insert(0, str(REPO_DIR))
 
 from layers.session_layer import SessionLayer
 from layers.graph_layer import GraphLayer
+import config
 from recall import recall
 import promote
 import vault
 import hooks
 
-DEFAULT_DB = Path.home() / ".agent-memory" / "memory.db"
-DEFAULT_VAULT = Path.home() / ".agent-memory" / "vault"
+DEFAULT_DB = config.get_default_db()
+DEFAULT_VAULT = config.get_vault_dir()
 
 REAL_QUERIES = [
     ("flutter_tvlr_app", "FCM token login auth API"),
@@ -115,6 +116,7 @@ def run_stress_test(db_override: Path | None = None, vault_override: Path | None
         seed_synthetic_db(db_path, count=1000)
         temp_seeded = True
 
+    GraphLayer(db_path=db_path)
     con = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
     total_obs = con.execute("SELECT COUNT(*) FROM observations").fetchone()[0]
     total_fts = con.execute("SELECT COUNT(*) FROM observations_fts").fetchone()[0]

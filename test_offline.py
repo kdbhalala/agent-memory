@@ -696,6 +696,101 @@ with tempfile.TemporaryDirectory() as mod_tmp:
     gl.add_edge("ModB", "CONNECTS", "ModC", "ModB connects to ModC", project="mod-proj")
     assert len(global_edges) == 1  # Unregistered listener not called
 
+# 12. Test Cold-Start Bootstrap, Observation Inspection/Deletion, and Observability CLI
+with tempfile.TemporaryDirectory() as boot_tmp:
+    b_dir = Path(boot_tmp)
+    b_db = b_dir / "boot_test.db"
+
+    # Setup dummy project with README and git repo
+    proj_dir = b_dir / "sample_app"
+    proj_dir.mkdir()
+    (proj_dir / "pyproject.toml").write_text('[project]\nname = "sample-agent-app"\nversion = "0.1.0"\n')
+    (proj_dir / "README.md").write_text("# Sample Agent App\n\nHigh-performance zero-dependency coding assistant.\n\n## Architecture\nUses SQLite FTS5 for L1 and recursive CTEs for L2.\n")
+
+    # Initialize git repo with commits
+    import subprocess
+    subprocess.run(["git", "init"], cwd=proj_dir, capture_output=True, check=True)
+    subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=proj_dir, capture_output=True, check=True)
+    subprocess.run(["git", "config", "user.name", "Test User"], cwd=proj_dir, capture_output=True, check=True)
+    subprocess.run(["git", "add", "."], cwd=proj_dir, capture_output=True, check=True)
+    subprocess.run(["git", "commit", "-m", "feat: initial commit with README"], cwd=proj_dir, capture_output=True, check=True)
+
+    # Second commit (bugfix)
+    (proj_dir / "fix.txt").write_text("fix")
+    subprocess.run(["git", "add", "."], cwd=proj_dir, capture_output=True, check=True)
+    subprocess.run(["git", "commit", "-m", "fix: resolve memory leak in worker\n\nDetailed fix explanation."], cwd=proj_dir, capture_output=True, check=True)
+
+    # Test bootstrap module
+    import bootstrap
+    detected_name = bootstrap.detect_project_name(proj_dir)
+    assert detected_name == "sample-agent-app"
+
+    readme_info = bootstrap.extract_readme_context(proj_dir)
+    assert readme_info is not None
+    assert "Sample Agent App" in readme_info["title"]
+    assert readme_info["category"] == "architecture"
+
+    commits = bootstrap.extract_git_commits(proj_dir, max_commits=10)
+    assert len(commits) == 2
+    assert any(c["category"] == "bugfix" for c in commits)
+    assert any(c["category"] == "decision" for c in commits)
+
+    # Run bootstrap_project
+    res1 = bootstrap.bootstrap_project(repo_dir=proj_dir, max_commits=10, db_path=b_db)
+    assert res1["project"] == "sample-agent-app"
+    assert res1["created_count"] == 3  # 1 README + 2 commits
+    assert res1["readme_bootstrapped"] is True
+    assert res1["commits_bootstrapped"] == 2
+
+    # Verify idempotency
+    res2 = bootstrap.bootstrap_project(repo_dir=proj_dir, max_commits=10, db_path=b_db)
+    assert res2["created_count"] == 0
+
+    # Test SessionLayer inspection and deletion APIs
+    sl_boot = SessionLayer(project="sample-agent-app", db_path=b_db)
+    all_obs = sl_boot.list_observations(limit=10, project="sample-agent-app")
+    assert len(all_obs) == 3
+
+    # Inspect single observation
+    first_id = all_obs[0]["id"]
+    obs_detail = sl_boot.get_observation(first_id)
+    assert obs_detail is not None
+    assert obs_detail["id"] == first_id
+    assert obs_detail["project"] == "sample-agent-app"
+    assert "facts" in obs_detail
+    assert "narrative" in obs_detail
+
+    assert sl_boot.get_observation(999999) is None
+
+    # Test soft delete
+    del_id = all_obs[-1]["id"]
+    ok_soft = sl_boot.delete_observation(del_id, hard=False)
+    assert ok_soft is True
+    remaining = sl_boot.list_observations(limit=10, project="sample-agent-app")
+    assert len(remaining) == 2  # Soft deleted item excluded from default list
+    all_incl = sl_boot.list_observations(limit=10, project="sample-agent-app", include_superseded=True)
+    assert len(all_incl) == 3
+
+    # Test hard delete
+    ok_hard = sl_boot.delete_observation(del_id, hard=True)
+    assert ok_hard is True
+    all_after_hard = sl_boot.list_observations(limit=10, project="sample-agent-app", include_superseded=True)
+    assert len(all_after_hard) == 2
+
+    # Test mcp_server memory_bootstrap tool
+    import mcp_server
+    # Test call_tool memory_bootstrap
+    tool_out = mcp_server.call_tool("memory_bootstrap", {"repo": str(proj_dir)})
+    assert isinstance(tool_out, str)
+
+    # Test mcp_server CLI handlers
+    mcp_server.cmd_log(["--limit", "5", "--project", "sample-agent-app"])
+    mcp_server.cmd_inspect([str(first_id)])
+    mcp_server.cmd_pin(["test_invariant", "Never use external dependencies", "--project", "sample-agent-app"])
+    mcp_server.cmd_blocks(["--project", "sample-agent-app"])
+    mcp_server.cmd_unpin(["test_invariant"])
+    mcp_server.cmd_delete([str(first_id)])
+
 print("layers OK")
 print("integrate tests OK")
 print("graph tests OK")
@@ -707,3 +802,4 @@ print("auto promote OK")
 print("bi-temporal graph and canonicalization OK")
 print("lifecycle hooks OK")
 print("modularity & event listener decoupling OK")
+print("cold-start bootstrap & observability CLI OK")

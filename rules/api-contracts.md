@@ -69,6 +69,27 @@ Lists all active or historical Core Memory blocks.
   - `project` (string, optional): Project filter.
 - **Returns**: Formatted list of Core Memory blocks.
 
+### 9. `memory_bootstrap`
+Bootstraps initial architectural memories from local Git commit history and repository README.md.
+- **Parameters**:
+  - `repo` (string, default: `"."`): Path to repository root.
+  - `project` (string, optional): Target project name.
+  - `max_commits` (integer, default: 20): Maximum high-signal git commits to parse.
+- **Returns**: Summary string with count of bootstrapped memories.
+
+## Developer Observability & Curation CLI
+
+Direct command-line interface for human developers to audit and curate memories without a SQLite shell:
+
+- `agent-memory log [--limit 20] [--project PROJ] [--all]`: List recent observations in a tabular format.
+- `agent-memory inspect <id>`: View full details, facts, narrative, and concepts of observation #`<id>`.
+- `agent-memory delete <id> [--hard]`: Soft-delete (mark superseded) or permanently purge an observation.
+- `agent-memory bootstrap [--repo .] [--max-commits 20]`: Seed initial memories from Git history and README.
+- `agent-memory recall <query> [--project PROJ] [--deep]`: Test working and durable memory search.
+- `agent-memory pin <key> <content> [--category CAT] [--project PROJ]`: Pin critical rule to core memory.
+- `agent-memory unpin <key>`: Unpin a block from core memory.
+- `agent-memory blocks [--project PROJ]`: List pinned core memory blocks.
+
 ## Lifecycle Hooks & Automation CLI
 
 Agent memory supports automated execution triggers across coding tools (Claude Code, Antigravity, Cursor, Codex, Git):
@@ -84,3 +105,4 @@ Agent memory supports automated execution triggers across coding tools (Claude C
   - `session-end`: Background vault sync with private GitHub repository.
   - `pre-commit`: Offline test suite verification.
   - `post-commit`: Automatically captures meaningful commit summaries and records them into session memory.
+

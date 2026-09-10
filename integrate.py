@@ -855,6 +855,9 @@ def cmd_install(args: argparse.Namespace) -> None:
             auto_gh=getattr(args, "auto_gh", False)
         )
 
+    if not getattr(args, "skip_bootstrap", False):
+        setup_bootstrap_interactive(non_interactive=getattr(args, "yes", False))
+
 
 def setup_sync_interactive(non_interactive: bool = False, auto_gh: bool = False) -> None:
     """Detect GitHub CLI and setup seamless cross-device synchronization."""
@@ -954,6 +957,63 @@ def setup_sync_interactive(non_interactive: bool = False, auto_gh: bool = False)
 
     print("Vault initialized locally with Git tracking. (Run 'agent-integrate sync init' anytime).\n")
     sync.init_git_repo(v_dir)
+
+
+def setup_bootstrap_interactive(non_interactive: bool = False) -> None:
+    """Check if in a project directory and offer to bootstrap initial memories."""
+    cwd = Path.cwd()
+    has_git = (cwd / ".git").exists()
+    has_readme = any((cwd / name).exists() for name in ["README.md", "readme.md", "README", "README.rst"])
+
+    if not (has_git or has_readme):
+        return
+
+    import bootstrap
+    proj = bootstrap.detect_project_name(cwd)
+
+    if non_interactive or not sys.stdin.isatty():
+        res = bootstrap.bootstrap_project(cwd, max_commits=20, project=proj)
+        if res["created_count"] > 0:
+            print(f"[✓] Cold-Start: Bootstrapped {res['created_count']} initial memories for '{proj}' from Git & README.\n")
+        return
+
+    try:
+        print("\n" + "=" * 70)
+        print("  Agent Memory Cold-Start Seeder")
+        print("=" * 70)
+        print(f"Detected project '{proj}' in {cwd}")
+        print("Seed initial memories from recent Git history and README so your assistant")
+        print("has instant recall of architectural decisions from Day 1?\n")
+        ans = input(f"Bootstrap memories for '{proj}'? [Y/n]: ").strip().lower()
+        if ans in ("", "y", "yes"):
+            res = bootstrap.bootstrap_project(cwd, max_commits=20, project=proj)
+            if res["created_count"] > 0:
+                print(f"[✓] Bootstrapped {res['created_count']} memories for '{proj}'.\n")
+            else:
+                print(f"[✓] Project '{proj}' already up-to-date.\n")
+    except (EOFError, KeyboardInterrupt):
+        print()
+
+
+def cmd_bootstrap(args: argparse.Namespace) -> None:
+    """Execute bootstrap subcommand."""
+    import bootstrap
+    res = bootstrap.bootstrap_project(repo_dir=args.path, max_commits=args.max_commits, project=args.project)
+    if getattr(args, "json", False):
+        print(json.dumps(res, indent=2))
+        return
+    count = res["created_count"]
+    proj = res["project"]
+    if count == 0:
+        print(f"[✓] Project '{proj}' already up-to-date (no new bootstrap memories needed).")
+    else:
+        parts = []
+        if res["readme_bootstrapped"]:
+            parts.append("1 README architecture")
+        if res["commits_bootstrapped"]:
+            parts.append(f"{res['commits_bootstrapped']} git commits")
+        detail = f" ({', '.join(parts)})" if parts else ""
+        print(f"[✓] Bootstrapped {count} memories for project '{proj}'{detail}.")
 
 
 def cmd_sync(args: argparse.Namespace) -> None:
@@ -1097,7 +1157,8 @@ def cmd_test(args: argparse.Namespace) -> None:
         tools = [t.get("name") for t in tools_res.get("result", {}).get("tools", [])]
         expected_tools = [
             "memory_recall", "memory_recall_deep", "memory_record",
-            "memory_promote", "memory_sync", "memory_pin", "memory_unpin", "memory_blocks"
+            "memory_promote", "memory_sync", "memory_pin", "memory_unpin", "memory_blocks",
+            "memory_bootstrap"
         ]
         for exp in expected_tools:
             if exp in tools:
@@ -1328,6 +1389,14 @@ def main() -> None:
     p_install.add_argument("--yes", "-y", action="store_true", help="Non-interactive mode with default recommendations")
     p_install.add_argument("--auto-gh", action="store_true", help="Auto-create private GitHub repo if gh is available")
     p_install.add_argument("--skip-sync", action="store_true", help="Skip Git sync setup during install")
+    p_install.add_argument("--skip-bootstrap", action="store_true", help="Skip automatic Git/README cold-start memory seeding")
+
+    # bootstrap
+    p_bootstrap = subparsers.add_parser("bootstrap", help="Bootstrap initial memories from Git history and README.md")
+    p_bootstrap.add_argument("path", nargs="?", default=".", help="Target repository directory (default: current directory)")
+    p_bootstrap.add_argument("--project", help="Override project name")
+    p_bootstrap.add_argument("--max-commits", type=int, default=20, help="Max git commits to analyze (default: 20)")
+    p_bootstrap.add_argument("--json", action="store_true", help="Output results as JSON")
 
     # scaffold
     p_scaffold = subparsers.add_parser("scaffold", help="Scaffold production multi-assistant project structure (rules/, context/, .mcp.json)")
@@ -1374,6 +1443,8 @@ def main() -> None:
         cmd_status(args)
     elif args.command == "install":
         cmd_install(args)
+    elif args.command == "bootstrap":
+        cmd_bootstrap(args)
     elif args.command == "scaffold":
         cmd_scaffold(args)
     elif args.command == "sync":
