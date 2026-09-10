@@ -141,8 +141,8 @@ removed = integrate.remove_yaml_subdict(injected, "mcp-servers", "agent-memory")
 assert "agent-memory:" not in removed
 
 # test rules append & remove
-with tempfile.NamedTemporaryFile(suffix=".md") as tmp:
-    t_path = Path(tmp.name)
+with tempfile.TemporaryDirectory() as tmp_dir:
+    t_path = Path(tmp_dir) / "test_rules.md"
     t_path.write_text("# Initial Header\n")
     assert integrate.append_rules_safe(t_path, "<!-- AGENT_MEMORY_DISCIPLINE_START -->\nRule\n<!-- AGENT_MEMORY_DISCIPLINE_END -->")
     assert not integrate.append_rules_safe(t_path, "Duplicate"), "Must be idempotent"
