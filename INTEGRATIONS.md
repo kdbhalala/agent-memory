@@ -10,9 +10,16 @@ All tools share the same memory: an architectural pattern recorded in Claude Cod
 
 ---
 
-## Quickstart: Automated Setup with `integrate.py`
+## Quickstart: Automated Setup
 
-The repository includes a zero-dependency CLI (`integrate.py`) that detects installed coding assistants on your system, inspects their configuration, and wires the MCP server and proactive memory rules automatically.
+### Option 1: Zero-Dependency One-Line Installer
+```bash
+curl -fsSL https://raw.githubusercontent.com/kdbhalala/agent-memory/main/install.sh | bash
+```
+Installs CLI wrappers to `~/.local/bin`, initializes the vault, wires all detected assistants, and tests the MCP handshake in under 2 seconds.
+
+### Option 2: Python Integration CLI (`integrate.py`)
+The repository includes a zero-dependency CLI (`integrate.py` / `agent-integrate`) that detects installed coding assistants on your system, inspects their configuration, and wires the MCP server and proactive memory rules automatically.
 
 ### 1. Check Status
 Inspect all supported tools on your machine:

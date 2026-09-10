@@ -160,29 +160,36 @@ graph TD
 
 ## Turnkey Setup in 10 Seconds
 
-Install the package:
+### Option A: One-Line Installer (Recommended)
+Zero external dependencies. Automatically verifies Python 3.10+, installs CLI binaries (`agent-memory`, `agent-integrate`, `agent-hooks`, `agent-recall`, `agent-sync`) into `~/.local/bin`, initializes your canonical vault, and wires all 12 coding assistants with lifecycle hooks:
+```bash
+curl -fsSL https://raw.githubusercontent.com/kdbhalala/agent-memory/main/install.sh | bash
+```
+
+### Option B: Local Repository Clone
 ```bash
 git clone https://github.com/kdbhalala/agent-memory.git
 cd agent-memory
-pip install -e .
+./install.sh
+```
+
+### Option C: Python CLI Setup
+```bash
+python3 integrate.py install all
 ```
 
 ### 1. Check Tool Status
 Inspect which AI coding assistants are detected on your machine:
 ```bash
-python integrate.py status
+agent-integrate status
+# or: python3 integrate.py status
 ```
 
-### 2. One-Command Turnkey Installation
-Configure the MCP server and proactive memory discipline rules across all detected assistants:
-```bash
-python integrate.py install all
-```
-
-### 3. Verify MCP Handshake
+### 2. Verify MCP Handshake
 Validate the stdio protocol and tool registrations:
 ```bash
-python integrate.py test
+agent-integrate test
+# or: python3 integrate.py test
 ```
 
 ### 4. Scaffold Any Project Repository
