@@ -8,7 +8,7 @@ This repository implements the two-layer memory architecture (SessionLayer L1 + 
 When operating in this codebase:
 1. Call `memory_recall(query, project="agent-memory")` to check past decisions and bugfixes before modifying code.
 2. Call `memory_recall_deep(query, project="agent-memory")` when architectural or cross-project context is needed.
-3. Call `memory_record(text, title, project="agent-memory")` when establishing conventions or resolving non-trivial issues.
+3. Call `memory_record(text, title, project="agent-memory", category="...", supersedes="...", relations=[...])` when establishing conventions or resolving non-trivial issues.
 
 ## Project Structure & Navigation
 

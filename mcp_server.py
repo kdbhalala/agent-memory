@@ -32,11 +32,22 @@ TOOLS = [
                                     "limit": {"type": "integer", "default": 5, "description": "Max hits to return"}},
                      "required": ["query"]}},
     {"name": "memory_record",
-     "description": "Save a decision, architectural choice, pattern, rule, or bugfix into session memory so all agents can recall it.",
+     "description": "Save a decision, architectural choice, pattern, rule, or bugfix into session memory and optionally long-term knowledge graph so all agents can recall it.",
      "inputSchema": {"type": "object",
                      "properties": {"text": {"type": "string", "description": "The technical observation, decision, or learning to record"},
                                     "title": {"type": "string", "description": "Short descriptive title for this memory"},
-                                    "project": {"type": "string", "description": "Target project name"}},
+                                    "category": {"type": "string", "enum": ["architecture", "pattern", "bugfix", "convention", "decision"],
+                                                 "default": "decision", "description": "Category of the memory"},
+                                    "project": {"type": "string", "description": "Target project name"},
+                                    "supersedes": {"type": "string", "description": "ID (#123) or keywords of an older memory that this decision overrides/replaces"},
+                                    "relations": {"type": "array",
+                                                  "description": "Knowledge graph triples (source, relation, target) to store in L2 durable memory",
+                                                  "items": {"type": "object",
+                                                            "properties": {"source": {"type": "string", "description": "Source entity or concept"},
+                                                                           "relation": {"type": "string", "description": "Relationship (e.g., uses, replaces, implements, forbids)"},
+                                                                           "target": {"type": "string", "description": "Target entity or concept"},
+                                                                           "fact": {"type": "string", "description": "Optional brief statement of the fact"}},
+                                                            "required": ["source", "relation", "target"]}}},
                      "required": ["text"]}},
     {"name": "memory_promote",
      "description": "Curate durable knowledge from session memory into long-term storage.",
@@ -87,8 +98,49 @@ def call_tool(name, args):
         if not text:
             return "error: 'text' parameter is required"
         title = args.get("title")
-        res = l1.record(text=text, title=title, project=project)
-        return res.get("message", f"Memory saved as observation #{res.get('id')}")
+        category = args.get("category", "decision")
+        supersedes = args.get("supersedes")
+        relations = args.get("relations") or []
+
+        res = l1.record(
+            text=text,
+            title=title,
+            project=project,
+            category=category,
+            supersedes=supersedes
+        )
+        msg = res.get("message", f"Memory saved as observation #{res.get('id')}")
+
+        # Ingest relations into L2 GraphLayer directly
+        added_edges = 0
+        if relations and isinstance(relations, list):
+            try:
+                from layers.graph_layer import GraphLayer
+                l2 = GraphLayer(project=project)
+                for item in relations:
+                    if isinstance(item, dict) and "source" in item and "relation" in item and "target" in item:
+                        src = str(item["source"]).strip()
+                        rel = str(item["relation"]).strip()
+                        tgt = str(item["target"]).strip()
+                        fact = str(item.get("fact", "")).strip() or f"{src} {rel} {tgt}"
+                        if src and rel and tgt:
+                            l2.add_edge(source=src, relation=rel, target=tgt, fact=fact, project=project)
+                            added_edges += 1
+            except Exception as e:
+                msg += f" (Note: graph edge insertion failed: {e})"
+
+        if added_edges:
+            msg += f"\nAdded {added_edges} relation(s) directly to L2 Knowledge Graph."
+
+        if res.get("superseded_ids"):
+            msg += f"\nMarked older observation(s) {', '.join(f'#{i}' for i in res['superseded_ids'])} as superseded."
+
+        if res.get("conflicts"):
+            conflict_strs = [f"#{c['id']} '{c['title']}': {c['text'][:80]}" for c in res["conflicts"]]
+            msg += f"\n\n[Notice - Potential Overlap Found]:\n" + "\n".join(conflict_strs)
+            msg += "\nIf this new record replaces any of the above, call memory_record with supersedes='#<id>'."
+
+        return msg
     if name == "memory_promote":
         from layers.graph_layer import GraphLayer
         import promote

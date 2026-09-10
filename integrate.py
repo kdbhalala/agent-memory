@@ -52,7 +52,9 @@ MEMORY_RULES_MD = """<!-- AGENT_MEMORY_DISCIPLINE_START -->
 When working on non-trivial tasks, debugging errors, or establishing patterns:
 1. **Recall Prior Precedents**: Call `memory_recall` on the `agent-memory` MCP server with relevant keywords and project name to check past decisions and established patterns before making assumptions.
 2. **Deep Architecture Search**: If L1 recall is thin or high-level architecture/cross-project context is needed, use `memory_recall_deep`.
-3. **Record Verified Learnings**: When settling an architectural pattern, fixing a recurring bug, or agreeing on project conventions, call `memory_record` so all coding agents stay in sync.
+3. **Record Verified Learnings**: When settling an architectural pattern, fixing a recurring bug, or agreeing on project conventions, call `memory_record(text, title, project, category, supersedes, relations)`.
+   - Specify `supersedes="#<id>"` if this overrides an earlier decision.
+   - Extract 1–2 `relations=[{"source": "...", "relation": "...", "target": "..."}]` for the durable knowledge graph.
 <!-- AGENT_MEMORY_DISCIPLINE_END -->
 """
 
@@ -66,7 +68,7 @@ alwaysApply: true
 When starting non-trivial tasks, debugging errors, or making architectural decisions:
 1. **Recall Prior Precedents**: Call `memory_recall` on `agent-memory` MCP with relevant keywords and project name to check past decisions and established patterns.
 2. **Deep Search**: If L1 recall is thin or foundational architecture is involved, use `memory_recall_deep`.
-3. **Record Learnings**: When settling an architectural pattern or resolving a non-trivial bug, call `memory_record` to save the decision for all agents.
+3. **Record Learnings**: When settling an architectural pattern or resolving a non-trivial bug, call `memory_record(text, title, project, category, supersedes, relations)` to save the decision for all agents, specifying `supersedes` or `relations` when applicable.
 """
 
 AIDER_RULES_MD = """<!-- AGENT_MEMORY_DISCIPLINE_START -->
@@ -75,7 +77,7 @@ AIDER_RULES_MD = """<!-- AGENT_MEMORY_DISCIPLINE_START -->
 Use the `agent-memory` MCP server tools before making assumptions:
 - `memory_recall(query, project)`: Retrieve recent session decisions, patterns, or bug fixes.
 - `memory_recall_deep(query, project)`: Retrieve durable architecture rules and decisions.
-- `memory_record(text, title, project)`: Record newly resolved patterns, fixes, or rules.
+- `memory_record(text, title, project, category, supersedes, relations)`: Record newly resolved patterns, fixes, or rules.
 <!-- AGENT_MEMORY_DISCIPLINE_END -->
 """
 

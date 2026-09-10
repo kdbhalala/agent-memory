@@ -1,4 +1,5 @@
 """Offline checks: no LLM, no network (except localhost worker for L1 live test)."""
+import os
 from layers.base import Hit, MemoryLayer
 from recall import recall
 
@@ -235,8 +236,82 @@ with tempfile.TemporaryDirectory() as tmp_dir:
     assert sync_res["status"] == "synced"
     assert sync_res["pushed"] is True
 
+# 7. Test In-Flight Knowledge Graph Synthesis & Conflict Steering
+with tempfile.TemporaryDirectory() as inflight_tmp:
+    if_dir = Path(inflight_tmp)
+    if_db = if_dir / "if_test.db"
+    orig_env_db = os.environ.get("AGENT_MEMORY_DB")
+    os.environ["AGENT_MEMORY_DB"] = str(if_db)
+    try:
+        import mcp_server
+        from layers.session_layer import SessionLayer
+        from layers.graph_layer import GraphLayer
+
+        sl_if = SessionLayer(worker="http://127.0.0.1:99999", db_path=if_db, project="inflight-proj")
+
+        # 7a. Record initial decision
+        r1 = sl_if.record(
+            text="Use PostgreSQL for primary database storage",
+            title="Database Architecture",
+            project="inflight-proj",
+            category="architecture"
+        )
+        obs1_id = r1["id"]
+        assert obs1_id is not None
+        assert r1["category"] == "architecture"
+
+        # 7b. Record similar decision without supersedes -> conflict alert detected
+        r2 = sl_if.record(
+            text="Use SQLite FTS5 for local search and storage engine",
+            title="Database Architecture Engine",
+            project="inflight-proj",
+            category="architecture"
+        )
+        obs2_id = r2["id"]
+        assert any(c["id"] == obs1_id for c in r2["conflicts"]), f"Expected conflict with #{obs1_id}, got {r2['conflicts']}"
+
+        # 7c. Record decision explicitly superseding obs1_id
+        r3 = sl_if.record(
+            text="Use SQLite FTS5 exclusively; PostgreSQL is deprecated",
+            title="Final DB Architecture",
+            project="inflight-proj",
+            category="architecture",
+            supersedes=f"#{obs1_id}"
+        )
+        assert obs1_id in r3["superseded_ids"], f"Expected #{obs1_id} to be superseded, got {r3['superseded_ids']}"
+
+        # 7d. Verify search ranks active decision first and tags superseded record
+        hits = sl_if.search("PostgreSQL", limit=5)
+        assert any("[SUPERSEDED]" in h.text for h in hits), f"Expected [SUPERSEDED] tag in hits: {[h.text for h in hits]}"
+
+        # 7e. Test MCP memory_record with in-flight relations -> verifies L2 GraphLayer ingestion
+        mcp_res = mcp_server.call_tool("memory_record", {
+            "text": "Antigravity uses SQLite FTS5 for fast zero-latency local memory",
+            "title": "Agent Memory Architecture",
+            "project": "inflight-proj",
+            "category": "architecture",
+            "relations": [
+                {"source": "Antigravity", "relation": "USES", "target": "SQLite FTS5", "fact": "Antigravity uses SQLite FTS5"}
+            ]
+        })
+        assert "Added 1 relation(s) directly to L2 Knowledge Graph" in mcp_res, f"Unexpected MCP response: {mcp_res}"
+
+        # 7f. Verify graph node and edge creation in L2
+        gl_check = GraphLayer(db_path=if_db, project="inflight-proj")
+        g_stats = gl_check.stats()
+        assert g_stats["edges"] >= 1, f"Expected at least 1 edge in L2 graph, got {g_stats}"
+        g_hits = gl_check.search("Antigravity")
+        assert any("SQLite FTS5" in h.text for h in g_hits), f"Expected triple in graph search hits: {[h.text for h in g_hits]}"
+
+    finally:
+        if orig_env_db is not None:
+            os.environ["AGENT_MEMORY_DB"] = orig_env_db
+        else:
+            os.environ.pop("AGENT_MEMORY_DB", None)
+
 print("layers OK")
 print("integrate tests OK")
 print("graph tests OK")
 print("vault tests OK")
 print("sync tests OK")
+print("inflight memory synthesis OK")

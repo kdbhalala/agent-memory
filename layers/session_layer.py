@@ -71,6 +71,20 @@ class SessionLayer(MemoryLayer):
                 VALUES (new.id, new.title, new.subtitle, new.facts, new.narrative, new.concepts);
             END
         """)
+        con.execute("""
+            CREATE TRIGGER IF NOT EXISTS observations_ad AFTER DELETE ON observations BEGIN
+                INSERT INTO observations_fts(observations_fts, rowid, title, subtitle, facts, narrative, concepts)
+                VALUES ('delete', old.id, old.title, old.subtitle, old.facts, old.narrative, old.concepts);
+            END
+        """)
+        con.execute("""
+            CREATE TRIGGER IF NOT EXISTS observations_au AFTER UPDATE ON observations BEGIN
+                INSERT INTO observations_fts(observations_fts, rowid, title, subtitle, facts, narrative, concepts)
+                VALUES ('delete', old.id, old.title, old.subtitle, old.facts, old.narrative, old.concepts);
+                INSERT INTO observations_fts(rowid, title, subtitle, facts, narrative, concepts)
+                VALUES (new.id, new.title, new.subtitle, new.facts, new.narrative, new.concepts);
+            END
+        """)
         con.commit()
         con.close()
 
@@ -126,7 +140,7 @@ class SessionLayer(MemoryLayer):
             return []
         con = sqlite3.connect(f"file:{self.db_path}?mode=ro", uri=True)
         ph = ",".join("?" for _ in ids)
-        sql = ("SELECT id, project, title, facts, narrative FROM observations "
+        sql = ("SELECT id, project, title, facts, narrative, type FROM observations "
                f"WHERE id IN ({ph})")
         args: list = [int(i) for i in ids]
         if self.project:
@@ -134,10 +148,13 @@ class SessionLayer(MemoryLayer):
             args.append(self.project)
         rows = con.execute(sql, args).fetchall()
         con.close()
-        by_id = {
-            str(i): Hit(text=f"#{i} [{p}] {t}: {f} {n}", source=self.name, ref=str(i))
-            for i, p, t, f, n in rows
-        }
+        by_id = {}
+        for row in rows:
+            i, p, t, f, n = row[0], row[1], row[2], row[3], row[4]
+            typ = row[5] if len(row) > 5 else "decision"
+            tag = "[SUPERSEDED] " if typ == "superseded" else ""
+            by_id[str(i)] = Hit(text=f"#{i} {tag}[{p}] {t}: {f} {n}".replace("  ", " "),
+                                source=self.name, ref=str(i))
         return [by_id[str(i)] for i in ids if str(i) in by_id]
 
     def _via_sqlite(self, query: str, limit: int) -> list[Hit]:
@@ -156,17 +173,19 @@ class SessionLayer(MemoryLayer):
         if self.project:
             sql += " AND project = ?"
             args.append(self.project)
-        sql += " ORDER BY rank LIMIT ?"
+        sql += " ORDER BY (CASE WHEN observations.type = 'superseded' THEN 1 ELSE 0 END) ASC, rank LIMIT ?"
         args.append(limit)
         rows = con.execute(sql, args).fetchall()
         con.close()
         return self._bodies_by_id([str(i) for (i,) in rows])
 
     def record(self, text: str, title: str | None = None,
-               project: str | None = None, metadata: dict | None = None) -> dict:
+               project: str | None = None, metadata: dict | None = None,
+               category: str = "decision", supersedes: str | None = None) -> dict:
         """Record an observation/decision into L1 memory via worker HTTP or SQLite."""
         proj = project or self.project or "global"
         tit = title or (text[:60].strip() + ("..." if len(text) > 60 else ""))
+        cat = (category or "decision").strip().lower()
 
         # Primary: worker HTTP endpoint
         try:
@@ -174,19 +193,22 @@ class SessionLayer(MemoryLayer):
                 "text": text,
                 "title": tit,
                 "project": proj,
-                "metadata": metadata or {}
+                "metadata": metadata or {},
+                "category": cat,
+                "supersedes": supersedes
             }
             req = urllib.request.Request(
                 f"{self.worker}/api/memory/save",
                 data=json.dumps(req_data).encode("utf-8"),
                 headers={"Content-Type": "application/json"}
             )
-            with urllib.request.urlopen(req, timeout=5) as resp:
+            with urllib.request.urlopen(req, timeout=2) as resp:
                 res = json.load(resp)
                 return {
                     "id": res.get("id"),
                     "title": tit,
                     "project": proj,
+                    "category": cat,
                     "message": res.get("message", f"Memory saved as observation #{res.get('id')}")
                 }
         except Exception:
@@ -195,6 +217,28 @@ class SessionLayer(MemoryLayer):
         # Fallback: direct SQLite insertion (self-bootstraps schema if needed)
         if not self.db_path.exists():
             self._init_db(self.db_path)
+        else:
+            try:
+                con_trig = sqlite3.connect(self.db_path)
+                con_trig.execute("""
+                    CREATE TRIGGER IF NOT EXISTS observations_ad AFTER DELETE ON observations BEGIN
+                        INSERT INTO observations_fts(observations_fts, rowid, title, subtitle, facts, narrative, concepts)
+                        VALUES ('delete', old.id, old.title, old.subtitle, old.facts, old.narrative, old.concepts);
+                    END
+                """)
+                con_trig.execute("""
+                    CREATE TRIGGER IF NOT EXISTS observations_au AFTER UPDATE ON observations BEGIN
+                        INSERT INTO observations_fts(observations_fts, rowid, title, subtitle, facts, narrative, concepts)
+                        VALUES ('delete', old.id, old.title, old.subtitle, old.facts, old.narrative, old.concepts);
+                        INSERT INTO observations_fts(rowid, title, subtitle, facts, narrative, concepts)
+                        VALUES (new.id, new.title, new.subtitle, new.facts, new.narrative, new.concepts);
+                    END
+                """)
+                con_trig.commit()
+                con_trig.close()
+            except Exception:
+                pass
+
         import hashlib
         import time
         import uuid
@@ -206,6 +250,32 @@ class SessionLayer(MemoryLayer):
 
         con = sqlite3.connect(self.db_path)
         cur = con.cursor()
+
+        # 1. Conflict / Overlap Detection
+        conflicts = []
+        search_tokens = [t for t in re.findall(r"[a-z0-9]+", (tit + " " + text).lower())
+                         if len(t) > 2 and t not in STOPWORDS]
+        if search_tokens:
+            try:
+                sql_check = """
+                    SELECT observations.id, observations.title, observations.facts, observations.narrative
+                    FROM observations_fts
+                    JOIN observations ON observations.id = observations_fts.rowid
+                    WHERE observations_fts MATCH ? AND observations.type != 'superseded'
+                """
+                params_check = [" OR ".join(search_tokens[:5])]
+                if proj and proj != "global":
+                    sql_check += " AND observations.project = ?"
+                    params_check.append(proj)
+                sql_check += " ORDER BY rank LIMIT 3"
+                rows_check = cur.execute(sql_check, params_check).fetchall()
+                for r_id, r_tit, r_facts, r_narr in rows_check:
+                    c_text = r_narr or r_facts or ""
+                    conflicts.append({"id": r_id, "title": r_tit or "", "text": c_text[:120]})
+            except Exception:
+                pass
+
+        # 2. Insert new observation
         cur.execute("""
             INSERT INTO observations (
                 memory_session_id, project, type, title, subtitle,
@@ -214,11 +284,52 @@ class SessionLayer(MemoryLayer):
                 content_hash, generated_by_model, relevance_count, sync_rev
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
-            session_id, proj, "decision", tit, "Recorded via agent-memory",
-            json.dumps([text]), text, json.dumps(["decision", "pattern"]),
+            session_id, proj, cat, tit, "Recorded via agent-memory",
+            json.dumps([text]), text, json.dumps([cat, "pattern"]),
             "[]", "[]", 1, 0, now_iso, now_epoch, content_hash, "agent-memory", 0, "1"
         ))
         obs_id = cur.lastrowid
+
+        # 3. Process supersedes if provided
+        superseded_ids = []
+        if supersedes:
+            explicit_ids = [int(m) for m in re.findall(r"#?(\d+)", str(supersedes))]
+            if explicit_ids:
+                for eid in explicit_ids:
+                    if eid != obs_id:
+                        cur.execute("""
+                            UPDATE observations
+                            SET type = 'superseded',
+                                subtitle = COALESCE(subtitle, '') || ' [SUPERSEDED by #' || ? || ']'
+                            WHERE id = ?
+                        """, (obs_id, eid))
+                        if cur.rowcount > 0:
+                            superseded_ids.append(eid)
+            else:
+                sup_tokens = [t for t in re.findall(r"[a-z0-9]+", str(supersedes).lower())
+                              if len(t) > 2 and t not in STOPWORDS]
+                if sup_tokens:
+                    sql_sup = """
+                        SELECT observations.id FROM observations_fts
+                        JOIN observations ON observations.id = observations_fts.rowid
+                        WHERE observations_fts MATCH ? AND observations.id != ?
+                    """
+                    p_sup = [" AND ".join(sup_tokens[:4]), obs_id]
+                    if proj and proj != "global":
+                        sql_sup += " AND observations.project = ?"
+                        p_sup.append(proj)
+                    sql_sup += " ORDER BY rank LIMIT 1"
+                    found = cur.execute(sql_sup, p_sup).fetchall()
+                    for (fid,) in found:
+                        cur.execute("""
+                            UPDATE observations
+                            SET type = 'superseded',
+                                subtitle = COALESCE(subtitle, '') || ' [SUPERSEDED by #' || ? || ']'
+                            WHERE id = ?
+                        """, (obs_id, fid))
+                        if cur.rowcount > 0:
+                            superseded_ids.append(fid)
+
         con.commit()
         con.close()
 
@@ -231,10 +342,18 @@ class SessionLayer(MemoryLayer):
         except Exception:
             pass
 
+        filtered_conflicts = [
+            c for c in conflicts
+            if c["id"] != obs_id and c["id"] not in superseded_ids
+        ]
+
         return {
             "id": obs_id,
             "title": tit,
             "project": proj,
+            "category": cat,
+            "superseded_ids": superseded_ids,
+            "conflicts": filtered_conflicts,
             "message": f"Memory saved directly to SQLite as observation #{obs_id}"
         }
 
