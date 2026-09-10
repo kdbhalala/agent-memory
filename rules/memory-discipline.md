@@ -29,3 +29,8 @@ If `memory_record` returns a `[Notice - Potential Overlap Found]` alert pointing
 - To inspect sync status or force immediate compaction:
   - Run `agent-sync status` or `agent-sync sync`.
   - Or invoke the MCP tool `memory_sync`.
+
+### 5. Core Memory Pinning
+For non-negotiable architectural invariants (e.g., zero external pip dependencies, test verification commands):
+- Call `memory_pin(key, content, category, project)` so the rule is permanently pinned to Core Memory and automatically injected on session startup and every recall query.
+- Use `memory_unpin(key)` if a constraint is retired or refactored.

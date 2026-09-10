@@ -43,7 +43,7 @@ class SessionLayer(MemoryLayer):
                  db_path: Path | str | None = None):
         self.worker = worker
         self.project = project
-        self.db_path = Path(db_path) if db_path else DB
+        self.db_path = Path(db_path) if db_path else get_default_db()
 
     @staticmethod
     def _init_db(db_path: Path) -> None:
@@ -84,6 +84,21 @@ class SessionLayer(MemoryLayer):
                 INSERT INTO observations_fts(rowid, title, subtitle, facts, narrative, concepts)
                 VALUES (new.id, new.title, new.subtitle, new.facts, new.narrative, new.concepts);
             END
+        """)
+        con.execute("""
+            CREATE TABLE IF NOT EXISTS core_memory_blocks (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                block_key TEXT UNIQUE NOT NULL,
+                content TEXT NOT NULL,
+                category TEXT DEFAULT 'system',
+                project TEXT DEFAULT 'global',
+                pinned INTEGER DEFAULT 1,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        con.execute("""
+            CREATE INDEX IF NOT EXISTS idx_core_blocks_pinned ON core_memory_blocks(pinned, project)
         """)
         con.commit()
         con.close()
@@ -394,6 +409,131 @@ class SessionLayer(MemoryLayer):
 
     def add(self, text: str) -> None:
         self.record(text)
+
+    @staticmethod
+    def _ensure_core_table(con: sqlite3.Connection) -> None:
+        con.execute("""
+            CREATE TABLE IF NOT EXISTS core_memory_blocks (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                block_key TEXT UNIQUE NOT NULL,
+                content TEXT NOT NULL,
+                category TEXT DEFAULT 'system',
+                project TEXT DEFAULT 'global',
+                pinned INTEGER DEFAULT 1,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        con.execute("""
+            CREATE INDEX IF NOT EXISTS idx_core_blocks_pinned ON core_memory_blocks(pinned, project)
+        """)
+
+    def pin_block(self, key: str, content: str, category: str = "system", project: str | None = None) -> dict:
+        """Pin a critical rule, invariant, or architectural constraint to core memory."""
+        proj = project or self.project or "global"
+        cat = (category or "system").strip()
+        if not self.db_path.exists():
+            self._init_db(self.db_path)
+        con = sqlite3.connect(self.db_path)
+        self._ensure_core_table(con)
+        con.execute("""
+            INSERT INTO core_memory_blocks (block_key, content, category, project, pinned, updated_at)
+            VALUES (?, ?, ?, ?, 1, CURRENT_TIMESTAMP)
+            ON CONFLICT(block_key) DO UPDATE SET
+                content = excluded.content,
+                category = excluded.category,
+                project = excluded.project,
+                pinned = 1,
+                updated_at = CURRENT_TIMESTAMP
+        """, (key, content, cat, proj))
+        con.commit()
+        con.close()
+        return {
+            "key": key,
+            "block_key": key,
+            "content": content,
+            "category": cat,
+            "project": proj,
+            "pinned": True,
+        }
+
+    def unpin_block(self, key: str) -> bool:
+        """Unpin a block from core memory."""
+        if not self.db_path.exists():
+            return False
+        con = sqlite3.connect(self.db_path)
+        self._ensure_core_table(con)
+        cur = con.cursor()
+        cur.execute("""
+            UPDATE core_memory_blocks
+            SET pinned = 0, updated_at = CURRENT_TIMESTAMP
+            WHERE block_key = ?
+        """, (key,))
+        con.commit()
+        updated = cur.rowcount > 0
+        con.close()
+        return updated
+
+    def get_pinned_blocks(self, project: str | None = None) -> list[dict]:
+        """Return all active pinned blocks (pinned = 1) where project = ? OR project = 'global' (or all if project is None)."""
+        if not self.db_path.exists():
+            return []
+        con = sqlite3.connect(self.db_path)
+        self._ensure_core_table(con)
+        if project:
+            sql = ("SELECT id, block_key, content, category, project, pinned, created_at, updated_at "
+                   "FROM core_memory_blocks WHERE pinned = 1 AND (project = ? OR project = 'global') "
+                   "ORDER BY id ASC")
+            rows = con.execute(sql, [project]).fetchall()
+        else:
+            sql = ("SELECT id, block_key, content, category, project, pinned, created_at, updated_at "
+                   "FROM core_memory_blocks WHERE pinned = 1 ORDER BY id ASC")
+            rows = con.execute(sql).fetchall()
+        con.close()
+        return [
+            {
+                "id": r[0],
+                "key": r[1],
+                "block_key": r[1],
+                "content": r[2],
+                "category": r[3],
+                "project": r[4],
+                "pinned": bool(r[5]),
+                "created_at": r[6],
+                "updated_at": r[7],
+            }
+            for r in rows
+        ]
+
+    def list_blocks(self, project: str | None = None) -> list[dict]:
+        """Return all blocks."""
+        if not self.db_path.exists():
+            return []
+        con = sqlite3.connect(self.db_path)
+        self._ensure_core_table(con)
+        if project:
+            sql = ("SELECT id, block_key, content, category, project, pinned, created_at, updated_at "
+                   "FROM core_memory_blocks WHERE project = ? OR project = 'global' ORDER BY id ASC")
+            rows = con.execute(sql, [project]).fetchall()
+        else:
+            sql = ("SELECT id, block_key, content, category, project, pinned, created_at, updated_at "
+                   "FROM core_memory_blocks ORDER BY id ASC")
+            rows = con.execute(sql).fetchall()
+        con.close()
+        return [
+            {
+                "id": r[0],
+                "key": r[1],
+                "block_key": r[1],
+                "content": r[2],
+                "category": r[3],
+                "project": r[4],
+                "pinned": bool(r[5]),
+                "created_at": r[6],
+                "updated_at": r[7],
+            }
+            for r in rows
+        ]
 
 
 # Backward compatibility alias

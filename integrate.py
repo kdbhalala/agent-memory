@@ -1101,6 +1101,23 @@ def cmd_install(args: argparse.Namespace) -> None:
         status_icon = "✓" if success else "✗"
         print(f"[{status_icon}] {tool.display_name:22}: {msg}")
 
+    # Auto-configure lifecycle hooks for installed tools
+    print("\nConfiguring automated lifecycle hooks...")
+    try:
+        import hooks
+        for tool in selected:
+            if tool.name in ("claude", "claude-code"):
+                ok, msg = hooks.install_claude_hooks(scope=scope, py_path=py_path)
+                print(f"  [{'✓' if ok else '!'}] Claude Code hooks: {msg}")
+            elif tool.name in ("agy", "antigravity"):
+                ok, msg = hooks.install_agy_hooks(scope=scope, py_path=py_path)
+                print(f"  [{'✓' if ok else '!'}] Antigravity hooks: {msg}")
+        git_res = hooks.install_git_hooks(py_path=py_path)
+        if git_res[0]:
+            print(f"  [✓] Git hooks: {git_res[1]}")
+    except Exception as e:
+        print(f"  [!] Hook setup skipped: {e}")
+
     if not getattr(args, "skip_sync", False):
         setup_sync_interactive(
             non_interactive=getattr(args, "yes", False),
@@ -1347,7 +1364,10 @@ def cmd_test(args: argparse.Namespace) -> None:
         tools_req = {"jsonrpc": "2.0", "id": 3, "method": "tools/list", "params": {}}
         tools_res = send_rpc(tools_req)
         tools = [t.get("name") for t in tools_res.get("result", {}).get("tools", [])]
-        expected_tools = ["memory_recall", "memory_recall_deep", "memory_record", "memory_promote", "memory_sync"]
+        expected_tools = [
+            "memory_recall", "memory_recall_deep", "memory_record",
+            "memory_promote", "memory_sync", "memory_pin", "memory_unpin", "memory_blocks"
+        ]
         for exp in expected_tools:
             if exp in tools:
                 print(f"  [✓] tool registered: {exp}")
@@ -1508,8 +1528,53 @@ alwaysApply: true
 - Memory record: `memory_record(text, title, project="{proj_name}")`
 """)
 
+    # 7. Project Lifecycle Hooks (.claude/settings.json, .agents/hooks.json, .git/hooks/)
+    try:
+        import hooks
+        hooks.install_claude_hooks(scope="project", py_path=py_path)
+        hooks.install_agy_hooks(scope="project", py_path=py_path)
+        hooks.install_git_hooks(target_dir=target, py_path=py_path)
+        print(f"  [✓] Configured project lifecycle hooks (.claude/settings.json, .agents/hooks.json, .git/hooks/)")
+    except Exception as e:
+        print(f"  [-] Project hooks setup skipped: {e}")
+
     print(f"\n[✓] Successfully scaffolded universal multi-assistant structure in {target}!")
     print(f"Supported tools: Claude Code, Cursor, Codex, OpenCode, Antigravity, Windsurf, Aider, Cline, Roo Code.\n")
+
+
+def cmd_hooks(args: argparse.Namespace) -> None:
+    """Manage lifecycle hooks across coding tools."""
+    import hooks
+    py_path = getattr(args, "python", None) or detect_python()
+    scope = getattr(args, "scope", "user") or "user"
+    uninstall = getattr(args, "uninstall", False)
+    raw_tools = getattr(args, "tools", None) or ["all"]
+    tools = [t.lower() for t in raw_tools]
+
+    action_label = "Uninstalling" if uninstall else "Installing"
+    print(f"\n{action_label} agent-memory lifecycle hooks (scope: {scope})...\n")
+
+    if "all" in tools:
+        if uninstall:
+            res = hooks.uninstall_all_hooks(scope=scope)
+        else:
+            res = hooks.install_all_hooks(scope=scope, py_path=py_path)
+        for tool_name, (ok, msg) in res.items():
+            icon = "✓" if ok else "✗"
+            print(f"[{icon}] {tool_name:12}: {msg}")
+    else:
+        for t in tools:
+            if t in ("claude", "claude-code"):
+                ok, msg = hooks.uninstall_claude_hooks(scope=scope) if uninstall else hooks.install_claude_hooks(scope=scope, py_path=py_path)
+            elif t in ("agy", "antigravity"):
+                ok, msg = hooks.uninstall_agy_hooks(scope=scope) if uninstall else hooks.install_agy_hooks(scope=scope, py_path=py_path)
+            elif t == "git":
+                ok, msg = hooks.uninstall_git_hooks() if uninstall else hooks.install_git_hooks(py_path=py_path)
+            else:
+                ok, msg = False, f"Unsupported hook tool: {t}. Supported: claude, agy, git, all"
+            icon = "✓" if ok else "✗"
+            print(f"[{icon}] {t:12}: {msg}")
+    print()
 
 
 def main() -> None:
@@ -1549,6 +1614,13 @@ def main() -> None:
     p_sync.add_argument("--create-private", action="store_true", help="Auto-create private repo with gh (for init)")
     p_sync.add_argument("--repo-name", default="agent-memory-vault", help="Custom repo name for --create-private")
 
+    # hooks
+    p_hooks = subparsers.add_parser("hooks", help="Manage automated lifecycle hooks (session-start, pre-compact, session-end, pre-commit)")
+    p_hooks.add_argument("tools", nargs="*", default=["all"], help="Tool names (claude, agy, git, all)")
+    p_hooks.add_argument("--scope", choices=["user", "project"], default="user", help="Scope: user or project (default: user)")
+    p_hooks.add_argument("--uninstall", action="store_true", help="Uninstall lifecycle hooks instead of installing")
+    p_hooks.add_argument("--python", help="Override Python executable path")
+
     # uninstall
     p_uninstall = subparsers.add_parser("uninstall", help="Remove MCP server and rules for specified tools")
     p_uninstall.add_argument("tools", nargs="+", help="Tool names or 'all'")
@@ -1575,6 +1647,8 @@ def main() -> None:
         cmd_scaffold(args)
     elif args.command == "sync":
         cmd_sync(args)
+    elif args.command == "hooks":
+        cmd_hooks(args)
     elif args.command == "uninstall":
         cmd_uninstall(args)
     elif args.command == "test":

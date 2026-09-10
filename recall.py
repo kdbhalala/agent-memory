@@ -7,10 +7,17 @@ from layers.base import Hit, MemoryLayer
 
 
 def recall(query: str, l1: MemoryLayer, l2: MemoryLayer | None = None,
-           limit: int = 5, deep: bool = False) -> dict[str, list[Hit]]:
+           limit: int = 5, deep: bool = False) -> dict:
     recent = l1.search(query, limit=limit)
-    result: dict[str, list[Hit]] = {"recent": recent, "durable": []}
+    result: dict = {"recent": recent, "durable": []}
     
+    if hasattr(l1, "get_pinned_blocks"):
+        try:
+            pinned = l1.get_pinned_blocks(getattr(l1, "project", None))
+            result["core"] = pinned
+        except Exception:
+            result["core"] = []
+
     if l2 is None:
         try:
             from layers.graph_layer import GraphLayer
@@ -42,6 +49,14 @@ if __name__ == "__main__":
     l2 = GraphLayer(project=args.project)
 
     res = recall(args.query, l1, l2, limit=args.limit, deep=args.deep)
+    if res.get("core"):
+        print("## core memory (pinned)")
+        for b in res["core"]:
+            key = b.get("key") or b.get("block_key", "")
+            cat = b.get("category", "system")
+            content = b.get("content", "")
+            print(f"- [{key}] ({cat}): {content}")
+        print()
     print(f"## recent ({len(res['recent'])})")
     for h in res["recent"]:
         print(h.text)

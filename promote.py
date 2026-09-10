@@ -49,25 +49,31 @@ def collect(project: str | None = None, since_epoch: int = 0) -> list[str]:
         return []
     con = sqlite3.connect(f"file:{DB}?mode=ro", uri=True)
     out: list[str] = []
-    q = "SELECT project, learned, completed FROM session_summaries WHERE created_at_epoch > ?"
-    args: list = [since_epoch]
-    if project:
-        q += " AND project = ?"
-        args.append(project)
-    for proj, learned, completed in con.execute(q, args).fetchall():
-        body = " ".join(p for p in (learned, completed) if p and p != "None").strip()
-        if _signal(body):
-            out.append(f"[{proj}] session learning: {body}")
-    q = ("SELECT project, title, facts, concepts FROM observations "
-         "WHERE created_at_epoch > ? AND type IN ('decision','bugfix','feature')")
-    args = [since_epoch]
-    if project:
-        q += " AND project = ?"
-        args.append(project)
-    for proj, title, facts, concepts in con.execute(q, args).fetchall():
-        tags = set((concepts or "").split(","))
-        if tags & DURABLE_CONCEPTS and facts:
-            out.append(f"[{proj}] {title}: {facts}")
+    try:
+        q = "SELECT project, learned, completed FROM session_summaries WHERE created_at_epoch > ?"
+        args: list = [since_epoch]
+        if project:
+            q += " AND project = ?"
+            args.append(project)
+        for proj, learned, completed in con.execute(q, args).fetchall():
+            body = " ".join(p for p in (learned, completed) if p and p != "None").strip()
+            if _signal(body):
+                out.append(f"[{proj}] session learning: {body}")
+    except sqlite3.OperationalError:
+        pass
+    try:
+        q = ("SELECT project, title, facts, concepts FROM observations "
+             "WHERE created_at_epoch > ? AND type IN ('decision','bugfix','feature')")
+        args = [since_epoch]
+        if project:
+            q += " AND project = ?"
+            args.append(project)
+        for proj, title, facts, concepts in con.execute(q, args).fetchall():
+            tags = set((concepts or "").split(","))
+            if tags & DURABLE_CONCEPTS and facts:
+                out.append(f"[{proj}] {title}: {facts}")
+    except sqlite3.OperationalError:
+        pass
     con.close()
     return out
 
@@ -86,6 +92,19 @@ def promote(l2, project: str | None = None, since_epoch: int = 0,
     return fresh
 
 
+def auto_promote(limit: int = 25, project: str | None = None) -> list[str]:
+    """Automated knowledge graph promotion for hooks, compaction, and CLI."""
+    try:
+        candidates = collect(project=project)
+        if not candidates:
+            return []
+        from layers.graph_layer import GraphLayer
+        l2 = GraphLayer(db_path=DB, project=project)
+        return promote(l2, project=project, limit=limit)
+    except Exception:
+        return []
+
+
 if __name__ == "__main__":
     import argparse
 
@@ -95,28 +114,35 @@ if __name__ == "__main__":
                         help="Preview candidates without invoking L2 or modifying state")
     parser.add_argument("--limit", "-l", type=int, default=None,
                         help="Max items to promote/preview")
+    parser.add_argument("--auto", action="store_true",
+                        help="Automated batch promotion mode (defaults limit to 25)")
     args = parser.parse_args()
 
-    seen = _load_state()
-    candidates = collect(args.project)
-    fresh = [t for t in candidates if hashlib.sha1(t.encode()).hexdigest() not in seen]
-    if args.limit:
-        fresh = fresh[:args.limit]
-
-    print(f"Total candidates: {len(candidates)} | Fresh (unpromoted): {len(fresh)}")
-    if args.dry_run:
-        preview_count = min(len(fresh), 5)
-        if preview_count:
-            print(f"\n[Dry Run] Showing {preview_count} sample candidate(s):")
-            for idx, item in enumerate(fresh[:preview_count], 1):
-                print(f"  {idx}. {item[:140]}...")
-        else:
-            print("No fresh candidates found.")
+    if args.auto:
+        batch_limit = args.limit if args.limit is not None else 25
+        promoted = auto_promote(limit=batch_limit, project=args.project)
+        print(f"Auto-promoted {len(promoted)} item(s) to knowledge graph.")
     else:
-        if not fresh:
-            print("Nothing new to promote.")
+        seen = _load_state()
+        candidates = collect(args.project)
+        fresh = [t for t in candidates if hashlib.sha1(t.encode()).hexdigest() not in seen]
+        if args.limit:
+            fresh = fresh[:args.limit]
+
+        print(f"Total candidates: {len(candidates)} | Fresh (unpromoted): {len(fresh)}")
+        if args.dry_run:
+            preview_count = min(len(fresh), 5)
+            if preview_count:
+                print(f"\n[Dry Run] Showing {preview_count} sample candidate(s):")
+                for idx, item in enumerate(fresh[:preview_count], 1):
+                    print(f"  {idx}. {item[:140]}...")
+            else:
+                print("No fresh candidates found.")
         else:
-            from layers.graph_layer import GraphLayer
-            l2 = GraphLayer(project=args.project)
-            promoted = promote(l2, project=args.project, limit=args.limit)
-            print(f"Successfully promoted {len(promoted)} item(s) to native knowledge graph.")
+            if not fresh:
+                print("Nothing new to promote.")
+            else:
+                from layers.graph_layer import GraphLayer
+                l2 = GraphLayer(db_path=DB, project=args.project)
+                promoted = promote(l2, project=args.project, limit=args.limit)
+                print(f"Successfully promoted {len(promoted)} item(s) to native knowledge graph.")

@@ -59,9 +59,11 @@ Verifies `initialize`, `ping`, and tools registration (`memory_recall`, `memory_
 
 ---
 
-## The Five Standard MCP Tools
+---
 
-Every integrated tool gains access to five tools:
+## The Standard MCP Tools
+
+Every integrated tool gains access to 8 native tools:
 
 | MCP Tool | Primary Use | Example Query / Action |
 |---|---|---|
@@ -70,6 +72,45 @@ Every integrated tool gains access to five tools:
 | `memory_record` | In-flight curation, graph synthesis & conflict steering | `{"text": "Use SQLite FTS5", "title": "DB Arch", "category": "architecture", "supersedes": "#101", "relations": [{"source": "App", "relation": "USES", "target": "SQLite"}]}` |
 | `memory_promote` | Curate session learnings into L2 Knowledge Graph | `{"project": "my-app", "limit": 20}` |
 | `memory_sync` | Synchronize vault with Git/GitHub & run compaction | `{"action": "sync"}` / `{"action": "dedupe"}` |
+| `memory_pin` | Pin mission-critical invariants to Core Memory | `{"key": "zero_pip_deps", "content": "Zero external pip dependencies"}` |
+| `memory_unpin` | Unpin an invariant from Core Memory | `{"key": "zero_pip_deps"}` |
+| `memory_blocks` | List active Core Memory blocks | `{"project": "agent-memory"}` |
+
+---
+
+## Lifecycle Hooks Automation (`session-start`, `pre-compact`, `session-end`, `pre-commit`)
+
+Agent memory automatically triggers lifecycle hooks during coding assistant workflows:
+1. **`session-start` / `PreInvocation`**: Proactively fetches pinned Core Memory blocks and top project precedents, injecting them directly into the assistant's starting context prompt.
+2. **`pre-compact`**: Scans unpromoted high-signal working memories and clusters them into L2 knowledge graph triples right before context window compaction.
+3. **`session-end` / `Stop`**: Instantly commits vault changes and triggers a background Git push to your private remote.
+4. **`pre-commit`**: Validates offline test suites and memory invariants before code is committed.
+
+### Automated Setup (Default)
+Hooks are configured automatically when running `install all` or `scaffold`:
+```bash
+python integrate.py install all
+python integrate.py scaffold .
+```
+
+### Manual Hooks Command
+If you install or update coding tools after initial setup, manage hooks directly:
+```bash
+# Install hooks to all detected tools
+agent-memory integrate hooks all
+# Or with agent-integrate
+agent-integrate hooks claude agy git
+
+# Target specific tool
+agent-integrate hooks agy
+agent-integrate hooks claude
+
+# Project-level scope
+agent-integrate hooks all --scope project
+
+# Uninstall hooks
+agent-integrate hooks all --uninstall
+```
 
 ---
 

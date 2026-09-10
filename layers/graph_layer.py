@@ -22,6 +22,54 @@ from .base import Hit, MemoryLayer
 DEFAULT_DB = Path.home() / ".agent-memory" / "memory.db"
 CLAUDE_MEM_DB = Path.home() / ".claude-mem" / "claude-mem.db"
 
+STANDARD_ALIASES: List[Tuple[str, str, str]] = [
+    ("fcm", "FirebaseCloudMessaging", "messaging"),
+    ("k8s", "Kubernetes", "infra"),
+    ("jwt", "JSONWebToken", "auth"),
+    ("sqlite", "SQLite", "database"),
+    ("postgres", "PostgreSQL", "database"),
+    ("postgresql", "PostgreSQL", "database"),
+    ("auth", "Authentication", "security"),
+    ("ts", "TypeScript", "language"),
+    ("py", "Python", "language"),
+    ("mcp", "ModelContextProtocol", "protocol"),
+    ("db", "Database", "storage"),
+    ("api", "API", "interface"),
+    ("ui", "UserInterface", "interface"),
+    ("ci", "ContinuousIntegration", "devops"),
+]
+
+POSITIVE_RELATIONS: Set[str] = {
+    "USES", "UTILIZES", "DEPENDS_ON", "REQUIRES",
+    "IMPLEMENTS", "ALLOWS", "PERMITS", "ENABLES", "RECOMMENDS", "SUPPORTS"
+}
+
+NEGATIVE_RELATIONS: Set[str] = {
+    "PROHIBITS", "FORBIDS", "AVOIDS", "DISABLES", "DEPRECATED", "PREVENTS"
+}
+
+NON_EXCLUSIVE_RELATIONS: Set[str] = {
+    "APPLIES_TO", "SPECIFIES", "RELATES_TO", "TAGGED_WITH", "MENTIONS", "PART_OF"
+}
+
+
+def is_opposing_relation(r1: str, r2: str) -> bool:
+    """Determine whether two relationship types are semantically opposing."""
+    u1, u2 = r1.strip().upper(), r2.strip().upper()
+    if u1 == u2:
+        return False
+    if u1 == "REPLACES" or u2 == "REPLACES":
+        return True
+    if u1 in POSITIVE_RELATIONS and u2 in NEGATIVE_RELATIONS:
+        return True
+    if u1 in NEGATIVE_RELATIONS and u2 in POSITIVE_RELATIONS:
+        return True
+    if u1.startswith("NOT_") and u1[4:] == u2:
+        return True
+    if u2.startswith("NOT_") and u2[4:] == u1:
+        return True
+    return False
+
 
 def get_db_path() -> Path:
     env_path = os.getenv("AGENT_MEMORY_DB") or os.getenv("CLAUDE_MEM_DB")
@@ -39,6 +87,7 @@ class GraphLayer(MemoryLayer):
     def __init__(self, db_path: Path | str | None = None, project: str | None = None):
         self.db_path = Path(db_path) if db_path else get_db_path()
         self.project = project
+        self._alias_cache: dict[str, str] = {}
         self._init_db()
 
     def _get_con(self, mode: str = "rw") -> sqlite3.Connection:
@@ -70,9 +119,45 @@ class GraphLayer(MemoryLayer):
                 fact TEXT NOT NULL,
                 project TEXT,
                 created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                is_active INTEGER NOT NULL DEFAULT 1,
+                valid_from TEXT DEFAULT CURRENT_TIMESTAMP,
+                valid_until TEXT,
+                superseded_by TEXT,
                 UNIQUE(source, relation, target, fact, project)
             )
         """)
+
+        # Migration for existing graph_edges table
+        cur.execute("PRAGMA table_info(graph_edges)")
+        existing_cols = {r[1] for r in cur.fetchall()}
+        if "is_active" not in existing_cols:
+            cur.execute("ALTER TABLE graph_edges ADD COLUMN is_active INTEGER NOT NULL DEFAULT 1")
+        if "valid_from" not in existing_cols:
+            cur.execute("ALTER TABLE graph_edges ADD COLUMN valid_from TEXT")
+            cur.execute("UPDATE graph_edges SET valid_from = CURRENT_TIMESTAMP WHERE valid_from IS NULL")
+        if "valid_until" not in existing_cols:
+            cur.execute("ALTER TABLE graph_edges ADD COLUMN valid_until TEXT")
+        if "superseded_by" not in existing_cols:
+            cur.execute("ALTER TABLE graph_edges ADD COLUMN superseded_by TEXT")
+
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS graph_aliases (
+                alias TEXT PRIMARY KEY,
+                canonical_name TEXT NOT NULL,
+                category TEXT,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_graph_aliases_canonical ON graph_aliases(canonical_name)")
+
+        # Auto-seed standard aliases if table is empty
+        cur.execute("SELECT COUNT(*) FROM graph_aliases")
+        if cur.fetchone()[0] == 0:
+            cur.executemany("""
+                INSERT OR IGNORE INTO graph_aliases (alias, canonical_name, category)
+                VALUES (?, ?, ?)
+            """, [(a.lower(), c, cat) for a, c, cat in STANDARD_ALIASES])
+
         cur.execute("""
             CREATE VIRTUAL TABLE IF NOT EXISTS graph_nodes_fts USING fts5(
                 name, entity_type, description, content='graph_nodes', content_rowid='id'
@@ -131,14 +216,71 @@ class GraphLayer(MemoryLayer):
         cur.execute("CREATE INDEX IF NOT EXISTS idx_graph_edges_source ON graph_edges(source)")
         cur.execute("CREATE INDEX IF NOT EXISTS idx_graph_edges_target ON graph_edges(target)")
         cur.execute("CREATE INDEX IF NOT EXISTS idx_graph_edges_project ON graph_edges(project)")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_graph_edges_active ON graph_edges(is_active)")
+
+        cur.execute("SELECT alias, canonical_name FROM graph_aliases")
+        self._alias_cache = {r[0].lower(): r[1] for r in cur.fetchall()}
 
         con.commit()
         con.close()
 
+    def resolve_node(self, name: str) -> str:
+        """Canonicalize name by checking lowercased alias against graph_aliases."""
+        clean_name = name.strip()
+        if not clean_name:
+            return clean_name
+        if not hasattr(self, "_alias_cache") or self._alias_cache is None:
+            self._load_alias_cache()
+        return self._alias_cache.get(clean_name.lower(), clean_name)
+
+    def add_alias(self, alias: str, canonical_name: str, category: str = "") -> None:
+        """Insert or replace an entity alias mapping in graph_aliases."""
+        a = alias.strip().lower()
+        c = canonical_name.strip()
+        cat = category.strip()
+        if not a or not c:
+            return
+        con = self._get_con(mode="rw")
+        cur = con.cursor()
+        cur.execute("""
+            INSERT INTO graph_aliases (alias, canonical_name, category)
+            VALUES (?, ?, ?)
+            ON CONFLICT(alias) DO UPDATE SET
+                canonical_name = excluded.canonical_name,
+                category = excluded.category,
+                created_at = CURRENT_TIMESTAMP
+        """, (a, c, cat))
+        con.commit()
+        con.close()
+        if not hasattr(self, "_alias_cache") or self._alias_cache is None:
+            self._alias_cache = {}
+        self._alias_cache[a] = c
+
+    def list_aliases(self) -> dict[str, str]:
+        """Return dictionary of alias -> canonical_name."""
+        con = self._get_con(mode="ro")
+        cur = con.cursor()
+        cur.execute("SELECT alias, canonical_name FROM graph_aliases ORDER BY alias ASC")
+        res = {r[0]: r[1] for r in cur.fetchall()}
+        con.close()
+        self._alias_cache = {k.lower(): v for k, v in res.items()}
+        return res
+
+    def _load_alias_cache(self) -> None:
+        """Load aliases into local in-memory cache for sub-millisecond lookup."""
+        try:
+            con = self._get_con(mode="ro")
+            cur = con.cursor()
+            cur.execute("SELECT alias, canonical_name FROM graph_aliases")
+            self._alias_cache = {r[0].lower(): r[1] for r in cur.fetchall()}
+            con.close()
+        except Exception:
+            self._alias_cache = {}
+
     def add_node(self, name: str, entity_type: str = "concept", description: str = "",
                  project: str | None = None) -> int:
         """Add or update an entity node in the graph."""
-        clean_name = name.strip()
+        clean_name = self.resolve_node(name)
         proj = project or self.project or "global"
         con = self._get_con()
         cur = con.cursor()
@@ -158,8 +300,8 @@ class GraphLayer(MemoryLayer):
     def add_edge(self, source: str, relation: str, target: str, fact: str,
                  project: str | None = None) -> None:
         """Add a directed edge connecting source and target with a relationship and fact."""
-        s = source.strip()
-        t = target.strip()
+        s = self.resolve_node(source)
+        t = self.resolve_node(target)
         r = relation.strip().upper().replace(" ", "_")
         f = fact.strip()
         proj = project or self.project or "global"
@@ -168,13 +310,55 @@ class GraphLayer(MemoryLayer):
         self.add_node(s, project=proj)
         self.add_node(t, project=proj)
 
+        superseded_tag = f"{s} -> {r} -> {t}"
+
         con = self._get_con()
         cur = con.cursor()
+
+        # Invalidation logic:
+        # Check active edges connecting source and target with:
+        # - opposing relation (e.g. USES vs PROHIBITS/FORBIDS)
+        # - relation is REPLACES
+        # - same relation with different fact
         cur.execute("""
-            INSERT INTO graph_edges (source, relation, target, fact, project)
-            VALUES (?, ?, ?, ?, ?)
+            SELECT id, source, target, relation, fact FROM graph_edges
+            WHERE is_active = 1
+              AND ((source = ? AND target = ?) OR (source = ? AND target = ?))
+              AND (project = ? OR project = 'global')
+        """, (s, t, t, s, proj))
+        rows = cur.fetchall()
+
+        to_invalidate = []
+        for edge_id, row_src, row_tgt, row_rel, row_fact in rows:
+            if row_src == s and row_tgt == t:
+                if is_opposing_relation(r, row_rel):
+                    to_invalidate.append(edge_id)
+                elif row_rel == r and row_fact != f:
+                    if row_rel not in NON_EXCLUSIVE_RELATIONS and row_tgt != proj and row_src != proj:
+                        to_invalidate.append(edge_id)
+            elif row_src == t and row_tgt == s:
+                if r == "REPLACES" or row_rel == "REPLACES":
+                    to_invalidate.append(edge_id)
+
+        if to_invalidate:
+            ph = ",".join("?" for _ in to_invalidate)
+            cur.execute(f"""
+                UPDATE graph_edges
+                SET is_active = 0, valid_until = CURRENT_TIMESTAMP, superseded_by = ?
+                WHERE id IN ({ph})
+            """, [superseded_tag] + to_invalidate)
+
+        cur.execute("""
+            INSERT INTO graph_edges (
+                source, relation, target, fact, project,
+                is_active, valid_from, valid_until, superseded_by
+            )
+            VALUES (?, ?, ?, ?, ?, 1, CURRENT_TIMESTAMP, NULL, NULL)
             ON CONFLICT(source, relation, target, fact, project) DO UPDATE SET
-                created_at=CURRENT_TIMESTAMP
+                is_active = 1,
+                valid_until = NULL,
+                superseded_by = NULL,
+                created_at = CURRENT_TIMESTAMP
         """, (s, r, t, f, proj))
         con.commit()
         con.close()
@@ -188,7 +372,11 @@ class GraphLayer(MemoryLayer):
                 "relation": r,
                 "target": t,
                 "fact": f,
-                "project": proj
+                "project": proj,
+                "is_active": 1,
+                "valid_from": time.strftime("%Y-%m-%d %H:%M:%S"),
+                "valid_until": None,
+                "superseded_by": None
             })
             schedule_auto_sync()
         except Exception:
@@ -328,7 +516,7 @@ class GraphLayer(MemoryLayer):
         except Exception:
             return None
 
-    def search(self, query: str, limit: int = 5) -> List[Hit]:
+    def search(self, query: str, limit: int = 5, include_inactive: bool = False) -> List[Hit]:
         """Search graph: match starting entities/facts and traverse connected relations."""
         tokens = [t for t in re.findall(r"[a-zA-Z0-9_-]+", query.lower()) if len(t) > 2]
         if not tokens:
@@ -337,9 +525,27 @@ class GraphLayer(MemoryLayer):
         con = self._get_con(mode="ro")
         cur = con.cursor()
 
-        # Step 1: Find matched nodes via FTS5 or LIKE prefix
-        ph_match = " OR ".join(f'"{t}"*' for t in tokens)
+        # Step 1: Find matched nodes via FTS5 or LIKE prefix, resolving entity aliases
         matched_nodes: Set[str] = set()
+        search_terms: List[str] = list(tokens)
+
+        clean_q = query.strip()
+        canon_q = self.resolve_node(clean_q)
+        if canon_q.lower() != clean_q.lower():
+            matched_nodes.add(canon_q)
+            for sub_t in re.findall(r"[a-zA-Z0-9_-]+", canon_q.lower()):
+                if len(sub_t) > 2 and sub_t not in search_terms:
+                    search_terms.append(sub_t)
+
+        for t in tokens:
+            canon_t = self.resolve_node(t)
+            if canon_t.lower() != t.lower():
+                matched_nodes.add(canon_t)
+                for sub_t in re.findall(r"[a-zA-Z0-9_-]+", canon_t.lower()):
+                    if len(sub_t) > 2 and sub_t not in search_terms:
+                        search_terms.append(sub_t)
+
+        ph_match = " OR ".join(f'"{t}"*' for t in search_terms)
 
         try:
             cur.execute("SELECT name FROM graph_nodes_fts WHERE graph_nodes_fts MATCH ? LIMIT 10", (ph_match,))
@@ -349,7 +555,7 @@ class GraphLayer(MemoryLayer):
             pass
 
         # Fallback LIKE matching
-        for t in tokens[:3]:
+        for t in search_terms[:3]:
             cur.execute("SELECT name FROM graph_nodes WHERE name LIKE ? OR description LIKE ? LIMIT 5",
                         (f"%{t}%", f"%{t}%"))
             for (name,) in cur.fetchall():
@@ -371,16 +577,19 @@ class GraphLayer(MemoryLayer):
                 proj_filter_1 = "AND (e.project = ? OR e.project = 'global')"
                 args = node_list + node_list + [self.project, self.project]
 
+            active_filter_0 = "" if include_inactive else "AND e0.is_active = 1"
+            active_filter_1 = "" if include_inactive else "AND e.is_active = 1"
+
             traversal_sql = f"""
                 WITH RECURSIVE graph_path(node, depth, path, fact) AS (
                     SELECT e0.target, 0, e0.source || ' -> ' || e0.relation || ' -> ' || e0.target, e0.fact
                     FROM graph_edges e0
-                    WHERE (e0.source IN ({ph}) OR e0.target IN ({ph})) {proj_filter_0}
+                    WHERE (e0.source IN ({ph}) OR e0.target IN ({ph})) {active_filter_0} {proj_filter_0}
                     UNION ALL
                     SELECT e.target, gp.depth + 1, gp.path || ' -> ' || e.relation || ' -> ' || e.target, e.fact
                     FROM graph_edges e
                     JOIN graph_path gp ON e.source = gp.node
-                    WHERE gp.depth < 2 {proj_filter_1}
+                    WHERE gp.depth < 2 {active_filter_1} {proj_filter_1}
                 )
                 SELECT DISTINCT path, fact FROM graph_path LIMIT ?;
             """
@@ -399,10 +608,15 @@ class GraphLayer(MemoryLayer):
         # Step 3: Direct edge search via FTS5 if graph traversal found few hits
         if len(hits) < limit:
             try:
-                cur.execute("""
-                    SELECT source, relation, target, fact FROM graph_edges_fts
-                    WHERE graph_edges_fts MATCH ? LIMIT ?
-                """, (ph_match, limit - len(hits)))
+                active_fts_filter = "" if include_inactive else "AND e.is_active = 1"
+                fts_sql = f"""
+                    SELECT e.source, e.relation, e.target, e.fact
+                    FROM graph_edges_fts fts
+                    JOIN graph_edges e ON e.id = fts.rowid
+                    WHERE graph_edges_fts MATCH ? {active_fts_filter}
+                    LIMIT ?
+                """
+                cur.execute(fts_sql, (ph_match, limit - len(hits)))
                 for s, r, t, f in cur.fetchall():
                     if f not in seen_facts:
                         seen_facts.add(f)
@@ -420,13 +634,17 @@ class GraphLayer(MemoryLayer):
         cur = con.cursor()
         node_count = cur.execute("SELECT COUNT(*) FROM graph_nodes").fetchone()[0]
         edge_count = cur.execute("SELECT COUNT(*) FROM graph_edges").fetchone()[0]
+        active_edge_count = cur.execute("SELECT COUNT(*) FROM graph_edges WHERE is_active = 1").fetchone()[0]
         relations = [r[0] for r in cur.execute("SELECT DISTINCT relation FROM graph_edges").fetchall()]
         projects = [r[0] for r in cur.execute("SELECT DISTINCT project FROM graph_edges").fetchall()]
+        alias_count = cur.execute("SELECT COUNT(*) FROM graph_aliases").fetchone()[0]
         con.close()
         return {
             "nodes": node_count,
             "edges": edge_count,
+            "active_edges": active_edge_count,
             "relations": relations,
             "projects": projects,
+            "aliases": alias_count,
             "db_path": str(self.db_path)
         }

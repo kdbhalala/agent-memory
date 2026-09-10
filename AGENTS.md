@@ -9,15 +9,18 @@ When operating in this codebase:
 1. Call `memory_recall(query, project="agent-memory")` to check past decisions and bugfixes before modifying code.
 2. Call `memory_recall_deep(query, project="agent-memory")` when architectural or cross-project context is needed.
 3. Call `memory_record(text, title, project="agent-memory", category="...", supersedes="...", relations=[...])` when establishing conventions or resolving non-trivial issues.
+4. Pin non-negotiable invariants using `memory_pin(key, content, category="architecture", project="agent-memory")`.
 
 ## Project Structure & Navigation
 
-- `layers/session_layer.py`: L1 Working Memory (SQLite FTS5 with BM25 ranking, <2ms).
-- `layers/graph_layer.py`: L2 Knowledge Graph (SQLite recursive CTEs, <0.5ms).
+- `layers/session_layer.py`: L1 Working Memory (SQLite FTS5 with BM25 ranking, <2ms) & Core Memory blocks.
+- `layers/graph_layer.py`: L2 Knowledge Graph (SQLite recursive CTEs, <0.5ms), Bi-Temporal Edges & Entity Aliases.
 - `vault.py`: Canonical Git-friendly append-only JSONL vault (`~/.agent-memory/vault/`) & deduplication engine.
 - `sync.py`: Background Git/GitHub sync & `gh` CLI automation.
-- `mcp_server.py`: Model Context Protocol server exposing `memory_recall`, `memory_recall_deep`, `memory_record`, `memory_promote`, `memory_sync`.
-- `integrate.py`: Automated multi-assistant installer and project scaffolder.
+- `hooks.py`: Universal lifecycle hooks dispatcher (`session-start`, `pre-compact`, `session-end`, `pre-commit`).
+- `promote.py`: Automated high-signal batch prompter L1 -> L2 (`--auto`).
+- `mcp_server.py`: Model Context Protocol server exposing `memory_recall`, `memory_recall_deep`, `memory_record`, `memory_promote`, `memory_sync`, `memory_pin`, `memory_unpin`, `memory_blocks`.
+- `integrate.py`: Automated multi-assistant installer, hook integrator (`agent-integrate hooks`), and project scaffolder.
 
 ## Modular Rules & Context
 

@@ -47,3 +47,40 @@ Controls multi-device Git synchronization and periodic database compaction.
 - **Parameters**:
   - `action` (string, default: `"sync"`): One of `"sync"`, `"status"`, or `"dedupe"`.
 - **Returns**: Execution summary or status report.
+
+### 6. `memory_pin`
+Pins a mission-critical rule, architectural constraint, or non-negotiable invariant into Core Memory. Pinned blocks are unconditionally prepended to every recall response and injected into session startup context.
+- **Parameters**:
+  - `key` (string, required): Unique identifier for the constraint (e.g. `"zero_pip_deps"`, `"format_scope"`).
+  - `content` (string, required): Constraint or invariant description.
+  - `category` (string, default: `"system"`): Category tag (`"architecture"`, `"security"`, `"convention"`, `"system"`).
+  - `project` (string, optional): Project scope or `"global"`.
+- **Returns**: Confirmation message with pinned block details.
+
+### 7. `memory_unpin`
+Unpins an invariant from active Core Memory.
+- **Parameters**:
+  - `key` (string, required): The unique block key to unpin.
+- **Returns**: Confirmation of unpinning.
+
+### 8. `memory_blocks`
+Lists all active or historical Core Memory blocks.
+- **Parameters**:
+  - `project` (string, optional): Project filter.
+- **Returns**: Formatted list of Core Memory blocks.
+
+## Lifecycle Hooks & Automation CLI
+
+Agent memory supports automated execution triggers across coding tools (Claude Code, Antigravity, Cursor, Codex, Git):
+
+- **Automatic Configuration**:
+  - Automatically installed during `python integrate.py install all` and `python integrate.py scaffold`.
+- **Manual Management**:
+  - `agent-memory integrate hooks [tools...] [--scope user|project] [--uninstall]`
+  - `agent-integrate hooks [claude|agy|git|all] [--scope user|project] [--uninstall]`
+- **Hook Endpoints**:
+  - `session-start`: Injects active project precedents and pinned Core Memory invariants into the assistant's initial prompt context.
+  - `pre-compact`: Curates and promotes high-signal working memory observations into L2 durable triples before context window truncation.
+  - `session-end`: Background vault sync with private GitHub repository.
+  - `pre-commit`: Offline test suite verification.
+  - `post-commit`: Automatically captures meaningful commit summaries and records them into session memory.

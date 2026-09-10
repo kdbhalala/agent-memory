@@ -3,7 +3,12 @@
 Exposes the two-layer framework to any MCP-capable coding agent:
   memory_recall        L1 session memory (fast, zero tokens server-side)
   memory_recall_deep   L1 + L2 durable knowledge (falls back to L1 alone)
+  memory_record        save decision, pattern, rule, or fix into session/graph
   memory_promote       curate durable items L1 -> L2 (native knowledge graph)
+  memory_sync          synchronize memory vault with Git/compaction
+  memory_pin           pin critical rule/invariant to core memory
+  memory_unpin         unpin a block from core memory
+  memory_blocks        list core memory blocks
 
 Run:  python3 mcp_server.py   (spawned by the agent with any cwd)
 """
@@ -61,11 +66,41 @@ TOOLS = [
                      "properties": {"action": {"type": "string", "enum": ["sync", "status", "dedupe"], "default": "sync",
                                                "description": "Sync action: 'sync' (bidirectional git sync), 'status' (check sync state), or 'dedupe' (compact and prune redundant memories)"}},
                      "required": []}},
+    {"name": "memory_pin",
+     "description": "Pin a critical rule, invariant, or architectural constraint to core memory so it is always recalled.",
+     "inputSchema": {"type": "object",
+                     "properties": {"key": {"type": "string", "description": "Unique identifier for the block"},
+                                    "content": {"type": "string", "description": "Rule or constraint text"},
+                                    "category": {"type": "string", "default": "system", "description": "Category of the block"},
+                                    "project": {"type": "string", "description": "Optional project filter"}},
+                     "required": ["key", "content"]}},
+    {"name": "memory_unpin",
+     "description": "Unpin a block from core memory.",
+     "inputSchema": {"type": "object",
+                     "properties": {"key": {"type": "string", "description": "Unique identifier of the block to unpin"}},
+                     "required": ["key"]}},
+    {"name": "memory_blocks",
+     "description": "List core memory blocks.",
+     "inputSchema": {"type": "object",
+                     "properties": {"project": {"type": "string", "description": "Optional project filter"}},
+                     "required": []}},
 ]
 
 
 def _hits_text(hits):
     return "\n---\n".join(h.text for h in hits) or "(no hits)"
+
+
+def _core_text(blocks):
+    if not blocks:
+        return ""
+    lines = ["## core memory (pinned)"]
+    for b in blocks:
+        k = b.get("key") or b.get("block_key", "")
+        cat = b.get("category", "system")
+        cnt = b.get("content", "")
+        lines.append(f"- [{k}] ({cat}): {cnt}")
+    return "\n".join(lines)
 
 
 def call_tool(name, args):
@@ -76,7 +111,12 @@ def call_tool(name, args):
         query = str(args.get("query", "")).strip()
         if not query:
             return "(empty query)"
-        return _hits_text(l1.search(query, limit))
+        pinned = l1.get_pinned_blocks(project=project) if hasattr(l1, "get_pinned_blocks") else []
+        core_block = _core_text(pinned)
+        recent_text = _hits_text(l1.search(query, limit))
+        if core_block:
+            return f"{core_block}\n\n## recent\n{recent_text}"
+        return recent_text
     if name == "memory_recall_deep":
         query = str(args.get("query", "")).strip()
         if not query:
@@ -87,12 +127,45 @@ def call_tool(name, args):
         except Exception:
             l2 = None
         r = recall(query, l1, l2, limit=limit, deep=True)
-        out = "## recent\n" + _hits_text(r["recent"])
+        out = ""
+        core_block = _core_text(r.get("core") or (l1.get_pinned_blocks(project=project) if hasattr(l1, "get_pinned_blocks") else []))
+        if core_block:
+            out += core_block + "\n\n"
+        out += "## recent\n" + _hits_text(r["recent"])
         if r["durable"]:
             out += "\n\n## durable\n" + _hits_text(r["durable"])
         elif r.get("note"):
             out += f"\n\n({r['note']})"
         return out
+    if name == "memory_pin":
+        key = str(args.get("key", "")).strip()
+        content = str(args.get("content", "")).strip()
+        if not key or not content:
+            return "error: 'key' and 'content' parameters are required"
+        category = str(args.get("category", "system") or "system").strip()
+        res = l1.pin_block(key=key, content=content, category=category, project=project)
+        return f"Pinned block [{res['key']}] ({res['category']}) to core memory."
+    if name == "memory_unpin":
+        key = str(args.get("key", "")).strip()
+        if not key:
+            return "error: 'key' parameter is required"
+        ok = l1.unpin_block(key)
+        if ok:
+            return f"Unpinned block [{key}] from core memory."
+        return f"Block [{key}] not found or already unpinned."
+    if name == "memory_blocks":
+        blocks = l1.list_blocks(project=project)
+        if not blocks:
+            return "(no core memory blocks)"
+        lines = []
+        for b in blocks:
+            pinned_str = "pinned" if b.get("pinned") else "unpinned"
+            key = b.get("key") or b.get("block_key", "")
+            cat = b.get("category", "system")
+            p = b.get("project", "global")
+            content = b.get("content", "")
+            lines.append(f"- [{key}] ({cat}, {p}, {pinned_str}): {content}")
+        return "\n".join(lines)
     if name == "memory_record":
         text = str(args.get("text", "")).strip()
         if not text:
@@ -220,4 +293,25 @@ def main():
 
 
 if __name__ == "__main__":
+    if len(sys.argv) > 1:
+        cmd = sys.argv[1].lower()
+        if cmd == "integrate":
+            import integrate
+            sys.argv = [sys.argv[0]] + sys.argv[2:]
+            integrate.main()
+            sys.exit(0)
+        elif cmd in ("hooks", "status", "install", "scaffold", "sync", "uninstall", "test", "generate"):
+            import integrate
+            integrate.main()
+            sys.exit(0)
+        elif cmd in ("-h", "--help", "help"):
+            print("agent-memory: Zero-dependency two-layer AI memory framework with MCP server.\n")
+            print("Usage:")
+            print("  agent-memory                         Start MCP stdio server")
+            print("  agent-memory integrate [COMMAND ...] Assistant integration & project scaffolding")
+            print("  agent-memory hooks [TOOLS ...]       Manage automated lifecycle hooks")
+            print("  agent-memory status                  Show MCP integration status")
+            print("  agent-memory sync [now|dedupe|init]  Manage multi-device vault synchronization")
+            print("  agent-memory test                    Verify MCP handshake and registered tools\n")
+            sys.exit(0)
     main()

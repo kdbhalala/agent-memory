@@ -196,6 +196,10 @@ def append_edge_to_vault(edge_dict: dict, vault_dir: Path | str | None = None) -
         d["kind"] = "edge"
         d["key"] = key
         d["project"] = proj
+        d["is_active"] = int(edge_dict.get("is_active", 1) if edge_dict.get("is_active") is not None else 1)
+        d["valid_from"] = edge_dict.get("valid_from") or time.strftime("%Y-%m-%d %H:%M:%S")
+        d["valid_until"] = edge_dict.get("valid_until")
+        d["superseded_by"] = edge_dict.get("superseded_by")
         line = json.dumps(d, ensure_ascii=False) + "\n"
         with open(graph_file, "a", encoding="utf-8") as f:
             f.write(line)
@@ -301,13 +305,27 @@ def export_dirty_to_vault(
                     exported_graph += 1
 
             # Edges
-            cur = con.execute("SELECT source, relation, target, fact, project FROM graph_edges")
+            cur_cols = [c[1] for c in con.execute("PRAGMA table_info(graph_edges)").fetchall()]
+            has_bi_temporal = "is_active" in cur_cols
+            if has_bi_temporal:
+                cur = con.execute("""
+                    SELECT source, relation, target, fact, project,
+                           is_active, valid_from, valid_until, superseded_by
+                    FROM graph_edges
+                """)
+            else:
+                cur = con.execute("SELECT source, relation, target, fact, project FROM graph_edges")
+
             for row in cur:
                 key = f"edge:{row['project']}:{row['source'].lower()}:{row['relation'].upper()}:{row['target'].lower()}:{row['fact']}"
                 if key not in existing_graph_keys:
                     d = dict(row)
                     d["kind"] = "edge"
                     d["key"] = key
+                    d["is_active"] = int(row["is_active"] if has_bi_temporal and row["is_active"] is not None else 1)
+                    d["valid_from"] = (row["valid_from"] if has_bi_temporal and row["valid_from"] else time.strftime("%Y-%m-%d %H:%M:%S"))
+                    d["valid_until"] = row["valid_until"] if has_bi_temporal else None
+                    d["superseded_by"] = row["superseded_by"] if has_bi_temporal else None
                     new_graph_lines.append(json.dumps(d, ensure_ascii=False) + "\n")
                     existing_graph_keys.add(key)
                     exported_graph += 1
@@ -407,7 +425,7 @@ def import_from_vault(
     graph_file = v_dir / "graph.jsonl"
     if graph_file.exists():
         from layers.graph_layer import GraphLayer
-        GraphLayer(db_path=g_db)
+        gl = GraphLayer(db_path=g_db)
 
         con = sqlite3.connect(g_db)
         with open(graph_file, "r", encoding="utf-8") as f:
@@ -422,20 +440,36 @@ def import_from_vault(
 
                 kind = d.get("kind")
                 if kind == "node":
+                    name = gl.resolve_node(d.get("name", "")) if hasattr(gl, "resolve_node") else d.get("name", "")
                     con.execute("""
                         INSERT INTO graph_nodes (name, entity_type, description, project)
                         VALUES (?, ?, ?, ?)
                         ON CONFLICT(name) DO UPDATE SET
                             description = CASE WHEN excluded.description != '' THEN excluded.description ELSE graph_nodes.description END,
                             project = excluded.project
-                    """, (d.get("name", ""), d.get("entity_type", "concept"), d.get("description", ""), d.get("project", "")))
+                    """, (name, d.get("entity_type", "concept"), d.get("description", ""), d.get("project", "")))
                     imported_graph += 1
                 elif kind == "edge":
+                    src = gl.resolve_node(d.get("source", "")) if hasattr(gl, "resolve_node") else d.get("source", "")
+                    tgt = gl.resolve_node(d.get("target", "")) if hasattr(gl, "resolve_node") else d.get("target", "")
+                    rel = d.get("relation", "RELATES_TO")
+                    fact = d.get("fact", "")
+                    proj = d.get("project", "")
+                    is_active = int(d.get("is_active", 1) if d.get("is_active") is not None else 1)
+                    valid_from = d.get("valid_from")
+                    valid_until = d.get("valid_until")
+                    superseded_by = d.get("superseded_by")
                     con.execute("""
-                        INSERT OR IGNORE INTO graph_edges (source, relation, target, fact, project)
-                        VALUES (?, ?, ?, ?, ?)
-                    """, (d.get("source", ""), d.get("relation", "RELATES_TO"), d.get("target", ""),
-                          d.get("fact", ""), d.get("project", "")))
+                        INSERT INTO graph_edges (
+                            source, relation, target, fact, project,
+                            is_active, valid_from, valid_until, superseded_by
+                        )
+                        VALUES (?, ?, ?, ?, ?, ?, COALESCE(?, CURRENT_TIMESTAMP), ?, ?)
+                        ON CONFLICT(source, relation, target, fact, project) DO UPDATE SET
+                            is_active = excluded.is_active,
+                            valid_until = excluded.valid_until,
+                            superseded_by = excluded.superseded_by
+                    """, (src, rel, tgt, fact, proj, is_active, valid_from, valid_until, superseded_by))
                     imported_graph += 1
         con.commit()
         con.close()
@@ -546,6 +580,15 @@ def deduplicate_and_compact(
         seen_nodes: Dict[Tuple[str, str], dict] = {}
         seen_edges: Dict[Tuple[str, str, str, str], dict] = {}
 
+        alias_map: Dict[str, str] = {}
+        if g_db.exists():
+            try:
+                con_g = sqlite3.connect(f"file:{g_db}?mode=ro", uri=True)
+                alias_map = {r[0].lower(): r[1].lower() for r in con_g.execute("SELECT alias, canonical_name FROM graph_aliases").fetchall()}
+                con_g.close()
+            except Exception:
+                pass
+
         with open(graph_file, "r", encoding="utf-8") as f:
             for line in f:
                 line = line.strip()
@@ -561,16 +604,27 @@ def deduplicate_and_compact(
                 proj = str(d.get("project") or "").strip().lower()
                 if kind == "node":
                     name = str(d.get("name") or "").strip()
-                    n_key = (name.lower(), proj)
+                    canon_name = alias_map.get(name.lower(), name.lower())
+                    n_key = (canon_name, proj)
                     if n_key not in seen_nodes or (d.get("description") and not seen_nodes[n_key].get("description")):
                         seen_nodes[n_key] = d
                 elif kind == "edge":
                     src = str(d.get("source") or "").strip().lower()
                     rel = str(d.get("relation") or "").strip().upper()
                     tgt = str(d.get("target") or "").strip().lower()
-                    e_key = (src, rel, tgt, proj)
-                    if e_key not in seen_edges or len(str(d.get("fact") or "")) > len(str(seen_edges[e_key].get("fact") or "")):
+                    canon_src = alias_map.get(src, src)
+                    canon_tgt = alias_map.get(tgt, tgt)
+                    e_key = (canon_src, rel, canon_tgt, proj)
+                    if e_key not in seen_edges:
                         seen_edges[e_key] = d
+                    else:
+                        existing = seen_edges[e_key]
+                        exist_active = int(existing.get("is_active", 1) if existing.get("is_active") is not None else 1)
+                        new_active = int(d.get("is_active", 1) if d.get("is_active") is not None else 1)
+                        if new_active > exist_active:
+                            seen_edges[e_key] = d
+                        elif new_active == exist_active and len(str(d.get("fact") or "")) > len(str(existing.get("fact") or "")):
+                            seen_edges[e_key] = d
 
         compacted_graph = list(seen_nodes.values()) + list(seen_edges.values())
         edges_after = len(compacted_graph)

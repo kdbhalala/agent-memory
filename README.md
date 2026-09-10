@@ -184,9 +184,48 @@ Equip any existing or new codebase with universal multi-assistant rules, modular
 python integrate.py scaffold /path/to/my-repo --name my-repo
 ```
 
+### 5. Automated Lifecycle Hooks
+Lifecycle hooks run automatically across assistants, injecting context on startup and auto-compacting on session end:
+```bash
+# Automated setup (happens automatically during install all and scaffold):
+agent-integrate hooks all
+
+# Target specific coding tools:
+agent-integrate hooks claude agy git
+
+# Or via agent-memory CLI:
+agent-memory integrate hooks agy claude
+```
+
+Supported lifecycle triggers:
+- **`session-start` / `PreInvocation`**: Injects pinned Core Memory invariants and top project precedents directly into the prompt context.
+- **`pre-compact`**: Promotes working memories into L2 knowledge graph triples before context window compaction.
+- **`session-end` / `Stop`**: Triggers immediate Git sync of the memory vault with your remote repository.
+- **`pre-commit`**: Runs offline test suite checks before git commits.
+- **`post-commit`**: Captures git commit summaries and records them into session memory.
+
 ---
 
-## Multi-Device Git Sync & Auto-Compaction
+## Core Memory & Bi-Temporal Knowledge Graph
+
+### 1. Core Memory Blocks (`memory_pin` / `memory_unpin`)
+Pin non-negotiable architectural invariants or guidelines so they are **unconditionally injected on session startup** and prepended to all recall responses:
+```bash
+# Pin an invariant
+curl / MCP: memory_pin(key="zero_pip_deps", content="Zero external pip dependencies: strictly Python stdlib and sqlite3", category="architecture")
+```
+
+### 2. Bi-Temporal Graph Edges
+L2 knowledge graph edges track validity windows (`is_active`, `valid_from`, `valid_until`, `superseded_by`). Contradictory edges are automatically invalidated while preserving full historical provenance.
+
+### 3. Pure-SQL Entity Alias Layer
+Canonicalizes synonyms and acronyms (`FCM` -> `FirebaseCloudMessaging`, `k8s` -> `Kubernetes`, `jwt` -> `JSONWebToken`) in <0.01ms with zero embeddings.
+
+### 4. Automated L1 -> L2 Graph Prompter
+Incrementally clusters unpromoted working observations into knowledge graph triples:
+```bash
+python promote.py --auto --limit 25
+```
 
 `agent-memory` completely separates **framework code** from your **memory data**:
 - **Framework Updates**: You can `git pull` or `pip install -U agent-memory` anytime without ever risking or modifying your memories.

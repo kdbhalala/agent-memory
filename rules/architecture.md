@@ -24,3 +24,12 @@
 5. **Host-Native In-Flight LLM Synthesis**:
    - Never require external LLM daemons, local weight downloads, or separate API keys.
    - Leverage the host assistant's active model in-flight during `memory_record` tool calls to extract L2 knowledge graph triples and identify superseded rules.
+
+6. **Bi-Temporal Knowledge Graph & Canonicalization**:
+   - L2 graph edges record temporal validity (`is_active`, `valid_from`, `valid_until`, `superseded_by`).
+   - Contradictory edges automatically get invalidated without destroying historical provenance.
+   - Pure-SQL entity aliasing (`graph_aliases`) canonicalizes acronyms and synonyms (e.g. `FCM` -> `FirebaseCloudMessaging`) in <0.01ms without heavyweight embedding models.
+
+7. **Core Memory & Automated Lifecycle Hooks**:
+   - Critical system invariants are stored as pinned Core Memory blocks (`core_memory_blocks`) prepended to recall queries.
+   - Universal lifecycle hooks (`session-start`, `pre-compact`, `session-end`, `pre-commit`) proactively inject context, auto-promote memories before context compression, and sync the vault on session termination.
