@@ -6,3 +6,6 @@ dependencies = []
 
 [project.optional-dependencies]
 cognee = ["cognee"]
+
+[project.scripts]
+agent-integrate = "integrate:main"

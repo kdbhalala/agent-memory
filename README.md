@@ -32,23 +32,45 @@ python promote.py --project my-repo --limit 20
 
 Either layer implements `layers/base.py::MemoryLayer` — replaceable.
 
-## Wiring (MCP server: `python3 mcp_server.py`, tools: `memory_recall`, `memory_recall_deep`, `memory_record`, `memory_promote`)
+## Turnkey CLI & IDE Integrations
 
-| Agent | Memory capture | agent-memory MCP |
-|---|---|---|
-| Claude Code | plugin ✓ | `claude mcp add agent-memory` ✓ connected |
-| OpenCode | plugin ✓ | `opencode.jsonc` `mcp` ✓ (restart session to load) |
-| Codex | plugin + hooks ✓ | `config.toml [mcp_servers.agent-memory]` ✓ enabled |
-| Copilot | installer ran (capture unconfirmed) | `copilot mcp add` ✓ listed |
-| agy | `memory_record` + global skill ✓ | `~/.gemini/config/mcp_config.json` ✓ enabled |
-| crush | n/a | `~/.config/crush/mcp.json` ✓ |
-| pi | n/a | `pi-mcp-extension` + `~/.pi/agent/mcp.json` ✓ |
+Connect all your AI coding assistants to the same shared memory in seconds:
+
+```bash
+# Check detected tools and configuration status
+python integrate.py status
+
+# Install MCP server config & memory rules to all detected tools
+python integrate.py install all
+
+# Verify MCP server protocol handshake (initialize, ping, tools/list)
+python integrate.py test
+```
+
+See [INTEGRATIONS.md](INTEGRATIONS.md) for full tool-by-tool copy-paste configs and manual setup instructions.
+
+## Wiring (MCP server: `python3 mcp_server.py`)
+
+Tools exposed: `memory_recall`, `memory_recall_deep`, `memory_record`, `memory_promote`.
+
+| Assistant / Environment | Type | agent-memory MCP | Proactive Memory Rules |
+|---|---|---|---|
+| Claude Code | CLI | `~/.claude.json` ✓ | `~/.claude/CLAUDE.md` ✓ |
+| Cursor | IDE | `~/.cursor/mcp.json` ✓ | `~/.cursor/rules/agent-memory.mdc` ✓ |
+| OpenAI Codex | CLI | `~/.codex/config.toml` ✓ | `~/.codex/AGENTS.md` ✓ |
+| OpenCode | CLI | `~/.config/opencode/opencode.jsonc` ✓ | `~/.config/opencode/rules.md` ✓ |
+| Antigravity (`agy`) | CLI/IDE | `~/.gemini/config/mcp_config.json` ✓ | `~/.gemini/config/skills/agent-memory/` ✓ |
+| Windsurf | IDE | `~/.codeium/windsurf/mcp_config.json` ✓ | `~/.windsurfrules` ✓ |
+| Aider | CLI | `~/.aider.conf.yml` ✓ | `~/.aider.conventions.md` ✓ |
+| Goose | CLI | `~/.config/goose/config.yaml` ✓ | `~/.config/goose/hints.md` ✓ |
+| Cline / Roo Code | VS Code | `cline_mcp_settings.json` ✓ | `.clinerules` / `.roomodes` ✓ |
+| Crush | CLI | `~/.config/crush/mcp.json` ✓ | n/a |
+| Pi | CLI | `~/.pi/agent/mcp.json` ✓ | n/a |
 
 ## Hands-off notes
 
 * Capture is fully automatic wherever claude-mem hooks are installed.
+* Any agent can record newly established patterns via `memory_record`, instantly syncing with all others.
 * Worker autostart: `~/Library/LaunchAgents/ai.cmem.worker.plist` (survives reboot).
-* Retrieval via MCP is on-demand: agents call it when relevant. First MCP call
-  in interactive agents (codex etc.) asks one approval — approve once.
+* Retrieval via MCP is on-demand: agents call it when relevant.
 * `memory_promote` is manual by design (LLM cost + curation judgment).
-  Verified live: codex `memory_recall` returned `#13326` end-to-end.

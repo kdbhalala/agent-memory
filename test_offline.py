@@ -100,4 +100,46 @@ with tempfile.NamedTemporaryFile(suffix=".db") as tmp:
     assert "SQLite" in rec["message"]
     layers.claudemem.DB = orig_db
 
+# test integrate.py logic
+import integrate
+import tempfile
+import json
+
+# test JSONC parsing
+sample_jsonc = '{\n  // comment\n  "url": "https://example.com/api",\n  "num": 42\n}'
+stripped = integrate.strip_jsonc_comments(sample_jsonc)
+parsed = json.loads(stripped)
+assert parsed["url"] == "https://example.com/api"
+assert parsed["num"] == 42
+
+# test YAML injection & removal
+yaml_doc = "other_key: true\n"
+injected = integrate.inject_yaml_subdict(yaml_doc, "mcp-servers", "agent-memory", [
+    "agent-memory:",
+    "  command: test-py",
+    "  args:",
+    "    - test-srv"
+])
+assert "mcp-servers:" in injected and "command: test-py" in injected
+removed = integrate.remove_yaml_subdict(injected, "mcp-servers", "agent-memory")
+assert "agent-memory:" not in removed
+
+# test rules append & remove
+with tempfile.NamedTemporaryFile(suffix=".md") as tmp:
+    t_path = Path(tmp.name)
+    t_path.write_text("# Initial Header\n")
+    assert integrate.append_rules_safe(t_path, "<!-- AGENT_MEMORY_DISCIPLINE_START -->\nRule\n<!-- AGENT_MEMORY_DISCIPLINE_END -->")
+    assert not integrate.append_rules_safe(t_path, "Duplicate"), "Must be idempotent"
+    assert "Rule" in t_path.read_text()
+    assert integrate.remove_rules_safe(t_path)
+    assert "Rule" not in t_path.read_text()
+    assert "# Initial Header" in t_path.read_text()
+
+# test tool registry
+assert len(integrate.INTEGRATIONS) == 12
+for tool in integrate.INTEGRATIONS:
+    cfg_snip = tool.generate_config("python3", "mcp_server.py")
+    assert "agent-memory" in cfg_snip
+
 print("layers OK")
+print("integrate tests OK")
