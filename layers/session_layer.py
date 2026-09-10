@@ -7,13 +7,10 @@ import json
 import re
 import sqlite3
 import os
-import urllib.parse
-import urllib.request
 from pathlib import Path
 
 from .base import Hit, MemoryLayer
 
-WORKER = os.environ.get("CLAUDE_MEM_WORKER", "http://127.0.0.1:37777")
 CLAUDE_MEM_DB = Path.home() / ".claude-mem" / "claude-mem.db"
 DEFAULT_DB = Path.home() / ".agent-memory" / "memory.db"
 
@@ -39,7 +36,7 @@ STOPWORDS = frozenset(
 class SessionLayer(MemoryLayer):
     name = "session"
 
-    def __init__(self, worker: str = WORKER, project: str | None = None,
+    def __init__(self, worker: str | None = None, project: str | None = None,
                  db_path: Path | str | None = None):
         self.worker = worker
         self.project = project
@@ -104,51 +101,8 @@ class SessionLayer(MemoryLayer):
         con.close()
 
     def search(self, query: str, limit: int = 5) -> list[Hit]:
-        # Plain reciprocal rank fusion over both rankers. Measured 9/10 on
-        # eval_l1.py; deeper fetch / arm weights overfit that 10-question set.
-        arms = [(self._safe_worker(query, limit), 1.0),
-                (self._via_sqlite(query, limit), 1.0)]
-        scores: dict[str, float] = {}
-        by_ref: dict[str, Hit] = {}
-        for hits, weight in arms:  # weighted reciprocal rank fusion
-            for rank, h in enumerate(hits):
-                if not h.ref:
-                    continue
-                scores[h.ref] = scores.get(h.ref, 0.0) + weight / (60 + rank)
-                by_ref.setdefault(h.ref, h)
-        ranked = sorted(scores, key=scores.__getitem__, reverse=True)[:limit]
-        return [by_ref[r] for r in ranked]
-
-    def _safe_worker(self, query: str, limit: int) -> list[Hit]:
-        try:
-            return self._via_worker(query, limit)
-        except Exception:
-            return []
-
-    def _via_worker(self, query: str, limit: int) -> list[Hit]:
-        params = {"query": query, "limit": limit}
-        if self.project:
-            params["project"] = self.project
-        q = urllib.parse.urlencode(params)
-        with urllib.request.urlopen(f"{self.worker}/api/search/observations?{q}",
-                                    timeout=15) as r:
-            body = json.load(r)
-        index = "".join(c.get("text", "") for c in body.get("content", []))
-        ids = re.findall(r"#(\d+)", index)
-        if not ids:
-            tokens = [t for t in re.findall(r"[a-z0-9]+", query.lower())
-                      if len(t) > 2 and t not in STOPWORDS]
-            if tokens:
-                params["query"] = " ".join(tokens[:5])
-                q = urllib.parse.urlencode(params)
-                with urllib.request.urlopen(f"{self.worker}/api/search/observations?{q}",
-                                            timeout=15) as r:
-                    body = json.load(r)
-                index = "".join(c.get("text", "") for c in body.get("content", []))
-                ids = re.findall(r"#(\d+)", index)
-        if not ids:
-            return []
-        return self._bodies_by_id(ids)
+        """Search working memory using SQLite FTS5 with prefix wildcard fallback."""
+        return self._via_sqlite(query, limit)
 
     def _bodies_by_id(self, ids: list[str]) -> list[Hit]:
         if not ids or not self.db_path.exists():
@@ -213,39 +167,12 @@ class SessionLayer(MemoryLayer):
     def record(self, text: str, title: str | None = None,
                project: str | None = None, metadata: dict | None = None,
                category: str = "decision", supersedes: str | None = None) -> dict:
-        """Record an observation/decision into L1 memory via worker HTTP or SQLite."""
+        """Record an observation/decision into L1 memory via direct SQLite FTS5 insertion."""
         proj = project or self.project or "global"
         tit = title or (text[:60].strip() + ("..." if len(text) > 60 else ""))
         cat = (category or "decision").strip().lower()
 
-        # Primary: worker HTTP endpoint
-        try:
-            req_data = {
-                "text": text,
-                "title": tit,
-                "project": proj,
-                "metadata": metadata or {},
-                "category": cat,
-                "supersedes": supersedes
-            }
-            req = urllib.request.Request(
-                f"{self.worker}/api/memory/save",
-                data=json.dumps(req_data).encode("utf-8"),
-                headers={"Content-Type": "application/json"}
-            )
-            with urllib.request.urlopen(req, timeout=2) as resp:
-                res = json.load(resp)
-                return {
-                    "id": res.get("id"),
-                    "title": tit,
-                    "project": proj,
-                    "category": cat,
-                    "message": res.get("message", f"Memory saved as observation #{res.get('id')}")
-                }
-        except Exception:
-            pass
-
-        # Fallback: direct SQLite insertion (self-bootstraps schema if needed)
+        # Direct SQLite insertion (self-bootstraps schema if needed)
         if not self.db_path.exists():
             self._init_db(self.db_path)
         else:

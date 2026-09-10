@@ -17,9 +17,3 @@ class MemoryLayer:
     def search(self, query: str, limit: int = 5) -> list[Hit]:
         raise NotImplementedError
 
-    def health(self) -> bool:
-        try:
-            self.search("__health__", limit=1)
-            return True
-        except Exception:
-            return False

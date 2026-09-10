@@ -286,9 +286,84 @@ class ToolIntegration:
         return MEMORY_RULES_MD.strip()
 
 
-class ClaudeCodeIntegration(ToolIntegration):
+class JsonMcpToolIntegration(ToolIntegration):
+    """Reusable base class for JSON-configured MCP tools."""
+    mcp_key: str = "mcpServers"
+    server_type: Optional[str] = None
+    extra_server_fields: Dict[str, Any] = {}
+    rules_template: str = MEMORY_RULES_MD
+
+    def _server_entry(self, py_path: str, srv_path: str) -> Dict[str, Any]:
+        d: Dict[str, Any] = {}
+        if self.server_type:
+            d["type"] = self.server_type
+        d["command"] = py_path
+        d["args"] = [srv_path]
+        if self.server_type == "stdio":
+            d["env"] = {}
+        if self.extra_server_fields:
+            d.update(self.extra_server_fields)
+        return d
+
+    def is_configured(self, scope: str = "user") -> bool:
+        cfg = read_json_safe(self.get_config_path(scope))
+        return cfg is not None and "agent-memory" in cfg.get(self.mcp_key, {})
+
+    def are_rules_installed(self, scope: str = "user") -> bool:
+        p = self.get_rules_path(scope)
+        if not p or not p.exists():
+            return False
+        content = p.read_text(encoding="utf-8")
+        return "Agent Memory Discipline" in content or "agent-memory" in content
+
+    def install(self, py_path: str, srv_path: str, scope: str = "user") -> Tuple[bool, str]:
+        cfg_path = self.get_config_path(scope)
+        cfg = read_json_safe(cfg_path) or {}
+        if self.mcp_key not in cfg:
+            cfg[self.mcp_key] = {}
+        cfg[self.mcp_key]["agent-memory"] = self._server_entry(py_path, srv_path)
+        write_json_safe(cfg_path, cfg)
+
+        rules_path = self.get_rules_path(scope)
+        if rules_path:
+            rules_path.parent.mkdir(parents=True, exist_ok=True)
+            if self.rules_template.startswith("---"):
+                rules_path.write_text(self.rules_template.strip() + "\n", encoding="utf-8")
+            else:
+                append_rules_safe(rules_path, self.rules_template)
+
+        msg = f"Configured {cfg_path}"
+        if rules_path:
+            msg += f" and rules at {rules_path}"
+        return True, msg
+
+    def uninstall(self, scope: str = "user") -> Tuple[bool, str]:
+        cfg_path = self.get_config_path(scope)
+        cfg = read_json_safe(cfg_path)
+        if cfg and self.mcp_key in cfg and "agent-memory" in cfg[self.mcp_key]:
+            del cfg[self.mcp_key]["agent-memory"]
+            write_json_safe(cfg_path, cfg)
+        rules_path = self.get_rules_path(scope)
+        if rules_path:
+            if self.rules_template.startswith("---"):
+                if rules_path.exists():
+                    rules_path.unlink()
+            else:
+                remove_rules_safe(rules_path)
+        return True, f"Removed from {cfg_path}"
+
+    def generate_config(self, py_path: str, srv_path: str) -> str:
+        return json.dumps({
+            self.mcp_key: {
+                "agent-memory": self._server_entry(py_path, srv_path)
+            }
+        }, indent=2)
+
+
+class ClaudeCodeIntegration(JsonMcpToolIntegration):
     name = "claude"
     display_name = "Claude Code"
+    server_type = "stdio"
 
     def is_detected(self) -> bool:
         return shutil.which("claude") is not None or (Path.home() / ".claude.json").exists()
@@ -299,62 +374,11 @@ class ClaudeCodeIntegration(ToolIntegration):
     def get_rules_path(self, scope: str = "user") -> Optional[Path]:
         return Path.home() / ".claude" / "CLAUDE.md" if scope == "user" else Path.cwd() / "CLAUDE.md"
 
-    def is_configured(self, scope: str = "user") -> bool:
-        cfg = read_json_safe(self.get_config_path(scope))
-        return cfg is not None and "agent-memory" in cfg.get("mcpServers", {})
 
-    def are_rules_installed(self, scope: str = "user") -> bool:
-        p = self.get_rules_path(scope)
-        if not p or not p.exists():
-            return False
-        return "Agent Memory Discipline" in p.read_text(encoding="utf-8")
-
-    def install(self, py_path: str, srv_path: str, scope: str = "user") -> Tuple[bool, str]:
-        cfg_path = self.get_config_path(scope)
-        cfg = read_json_safe(cfg_path) or {}
-        if "mcpServers" not in cfg:
-            cfg["mcpServers"] = {}
-        cfg["mcpServers"]["agent-memory"] = {
-            "type": "stdio",
-            "command": py_path,
-            "args": [srv_path],
-            "env": {}
-        }
-        write_json_safe(cfg_path, cfg)
-
-        rules_path = self.get_rules_path(scope)
-        if rules_path:
-            append_rules_safe(rules_path, MEMORY_RULES_MD)
-
-        return True, f"Configured {cfg_path} and rules at {rules_path}"
-
-    def uninstall(self, scope: str = "user") -> Tuple[bool, str]:
-        cfg_path = self.get_config_path(scope)
-        cfg = read_json_safe(cfg_path)
-        if cfg and "mcpServers" in cfg and "agent-memory" in cfg["mcpServers"]:
-            del cfg["mcpServers"]["agent-memory"]
-            write_json_safe(cfg_path, cfg)
-        rules_path = self.get_rules_path(scope)
-        if rules_path:
-            remove_rules_safe(rules_path)
-        return True, f"Removed from {cfg_path}"
-
-    def generate_config(self, py_path: str, srv_path: str) -> str:
-        return json.dumps({
-            "mcpServers": {
-                "agent-memory": {
-                    "type": "stdio",
-                    "command": py_path,
-                    "args": [srv_path],
-                    "env": {}
-                }
-            }
-        }, indent=2)
-
-
-class CursorIntegration(ToolIntegration):
+class CursorIntegration(JsonMcpToolIntegration):
     name = "cursor"
     display_name = "Cursor"
+    rules_template = CURSOR_RULES_MDC
 
     def is_detected(self) -> bool:
         return (Path.home() / ".cursor").exists() or shutil.which("cursor") is not None or Path("/Applications/Cursor.app").exists()
@@ -365,58 +389,11 @@ class CursorIntegration(ToolIntegration):
     def get_rules_path(self, scope: str = "user") -> Optional[Path]:
         return Path.home() / ".cursor" / "rules" / "agent-memory.mdc" if scope == "user" else Path.cwd() / ".cursor" / "rules" / "agent-memory.mdc"
 
-    def is_configured(self, scope: str = "user") -> bool:
-        cfg = read_json_safe(self.get_config_path(scope))
-        return cfg is not None and "agent-memory" in cfg.get("mcpServers", {})
-
-    def are_rules_installed(self, scope: str = "user") -> bool:
-        p = self.get_rules_path(scope)
-        return p is not None and p.exists()
-
-    def install(self, py_path: str, srv_path: str, scope: str = "user") -> Tuple[bool, str]:
-        cfg_path = self.get_config_path(scope)
-        cfg = read_json_safe(cfg_path) or {}
-        if "mcpServers" not in cfg:
-            cfg["mcpServers"] = {}
-        cfg["mcpServers"]["agent-memory"] = {
-            "command": py_path,
-            "args": [srv_path]
-        }
-        write_json_safe(cfg_path, cfg)
-
-        rules_path = self.get_rules_path(scope)
-        if rules_path:
-            rules_path.parent.mkdir(parents=True, exist_ok=True)
-            rules_path.write_text(CURSOR_RULES_MDC.strip() + "\n", encoding="utf-8")
-
-        return True, f"Configured {cfg_path} and rule at {rules_path}"
-
-    def uninstall(self, scope: str = "user") -> Tuple[bool, str]:
-        cfg_path = self.get_config_path(scope)
-        cfg = read_json_safe(cfg_path)
-        if cfg and "mcpServers" in cfg and "agent-memory" in cfg["mcpServers"]:
-            del cfg["mcpServers"]["agent-memory"]
-            write_json_safe(cfg_path, cfg)
-        rules_path = self.get_rules_path(scope)
-        if rules_path and rules_path.exists():
-            rules_path.unlink()
-        return True, f"Removed from {cfg_path}"
-
-    def generate_config(self, py_path: str, srv_path: str) -> str:
-        return json.dumps({
-            "mcpServers": {
-                "agent-memory": {
-                    "command": py_path,
-                    "args": [srv_path]
-                }
-            }
-        }, indent=2)
-
     def generate_rules(self) -> str:
         return CURSOR_RULES_MDC.strip()
 
 
-class WindsurfIntegration(ToolIntegration):
+class WindsurfIntegration(JsonMcpToolIntegration):
     name = "windsurf"
     display_name = "Windsurf"
 
@@ -428,52 +405,6 @@ class WindsurfIntegration(ToolIntegration):
 
     def get_rules_path(self, scope: str = "user") -> Optional[Path]:
         return Path.home() / ".windsurfrules" if scope == "user" else Path.cwd() / ".windsurfrules"
-
-    def is_configured(self, scope: str = "user") -> bool:
-        cfg = read_json_safe(self.get_config_path(scope))
-        return cfg is not None and "agent-memory" in cfg.get("mcpServers", {})
-
-    def are_rules_installed(self, scope: str = "user") -> bool:
-        p = self.get_rules_path(scope)
-        return p is not None and p.exists() and "Agent Memory Discipline" in p.read_text(encoding="utf-8")
-
-    def install(self, py_path: str, srv_path: str, scope: str = "user") -> Tuple[bool, str]:
-        cfg_path = self.get_config_path(scope)
-        cfg = read_json_safe(cfg_path) or {}
-        if "mcpServers" not in cfg:
-            cfg["mcpServers"] = {}
-        cfg["mcpServers"]["agent-memory"] = {
-            "command": py_path,
-            "args": [srv_path]
-        }
-        write_json_safe(cfg_path, cfg)
-
-        rules_path = self.get_rules_path(scope)
-        if rules_path:
-            append_rules_safe(rules_path, MEMORY_RULES_MD)
-
-        return True, f"Configured {cfg_path} and rules at {rules_path}"
-
-    def uninstall(self, scope: str = "user") -> Tuple[bool, str]:
-        cfg_path = self.get_config_path(scope)
-        cfg = read_json_safe(cfg_path)
-        if cfg and "mcpServers" in cfg and "agent-memory" in cfg["mcpServers"]:
-            del cfg["mcpServers"]["agent-memory"]
-            write_json_safe(cfg_path, cfg)
-        rules_path = self.get_rules_path(scope)
-        if rules_path:
-            remove_rules_safe(rules_path)
-        return True, f"Removed from {cfg_path}"
-
-    def generate_config(self, py_path: str, srv_path: str) -> str:
-        return json.dumps({
-            "mcpServers": {
-                "agent-memory": {
-                    "command": py_path,
-                    "args": [srv_path]
-                }
-            }
-        }, indent=2)
 
 
 class CodexIntegration(ToolIntegration):
@@ -604,9 +535,10 @@ class OpenCodeIntegration(ToolIntegration):
         }, indent=2)
 
 
-class AntigravityIntegration(ToolIntegration):
+class AntigravityIntegration(JsonMcpToolIntegration):
     name = "agy"
     display_name = "Antigravity CLI (agy)"
+    extra_server_fields = {"disabled": False}
 
     def is_detected(self) -> bool:
         return shutil.which("agy") is not None or (Path.home() / ".gemini").exists()
@@ -620,52 +552,11 @@ class AntigravityIntegration(ToolIntegration):
     def get_skill_path(self) -> Path:
         return Path.home() / ".gemini" / "config" / "skills" / "agent-memory" / "SKILL.md"
 
-    def is_configured(self, scope: str = "user") -> bool:
-        cfg = read_json_safe(self.get_config_path(scope))
-        return cfg is not None and "agent-memory" in cfg.get("mcpServers", {})
-
     def are_rules_installed(self, scope: str = "user") -> bool:
         skill_ok = self.get_skill_path().exists()
         rules_p = self.get_rules_path(scope)
         rules_ok = rules_p is not None and rules_p.exists() and ("Agent Memory" in rules_p.read_text(encoding="utf-8") or "agent-memory" in rules_p.read_text(encoding="utf-8"))
         return skill_ok or rules_ok
-
-    def install(self, py_path: str, srv_path: str, scope: str = "user") -> Tuple[bool, str]:
-        cfg_path = self.get_config_path(scope)
-        cfg = read_json_safe(cfg_path) or {}
-        if "mcpServers" not in cfg:
-            cfg["mcpServers"] = {}
-        cfg["mcpServers"]["agent-memory"] = {
-            "command": py_path,
-            "args": [srv_path],
-            "disabled": False
-        }
-        write_json_safe(cfg_path, cfg)
-
-        rules_path = self.get_rules_path(scope)
-        if rules_path:
-            append_rules_safe(rules_path, MEMORY_RULES_MD)
-
-        return True, f"Configured {cfg_path}"
-
-    def uninstall(self, scope: str = "user") -> Tuple[bool, str]:
-        cfg_path = self.get_config_path(scope)
-        cfg = read_json_safe(cfg_path)
-        if cfg and "mcpServers" in cfg and "agent-memory" in cfg["mcpServers"]:
-            del cfg["mcpServers"]["agent-memory"]
-            write_json_safe(cfg_path, cfg)
-        return True, f"Removed from {cfg_path}"
-
-    def generate_config(self, py_path: str, srv_path: str) -> str:
-        return json.dumps({
-            "mcpServers": {
-                "agent-memory": {
-                    "command": py_path,
-                    "args": [srv_path],
-                    "disabled": False
-                }
-            }
-        }, indent=2)
 
 
 class AiderIntegration(ToolIntegration):
@@ -791,9 +682,10 @@ class GooseIntegration(ToolIntegration):
         return f"extensions:\n  agent-memory:\n    type: stdio\n    cmd: {py_path}\n    args:\n      - {srv_path}\n    enabled: true"
 
 
-class ClineIntegration(ToolIntegration):
+class ClineIntegration(JsonMcpToolIntegration):
     name = "cline"
     display_name = "Cline (VS Code)"
+    extra_server_fields = {"disabled": False, "autoApprove": []}
 
     def _get_base_dir(self) -> Path:
         if sys.platform == "darwin":
@@ -812,57 +704,11 @@ class ClineIntegration(ToolIntegration):
     def get_rules_path(self, scope: str = "user") -> Optional[Path]:
         return Path.cwd() / ".clinerules"
 
-    def is_configured(self, scope: str = "user") -> bool:
-        cfg = read_json_safe(self.get_config_path(scope))
-        return cfg is not None and "agent-memory" in cfg.get("mcpServers", {})
 
-    def are_rules_installed(self, scope: str = "user") -> bool:
-        p = self.get_rules_path(scope)
-        return p is not None and p.exists() and "Agent Memory Discipline" in p.read_text(encoding="utf-8")
-
-    def install(self, py_path: str, srv_path: str, scope: str = "user") -> Tuple[bool, str]:
-        cfg_path = self.get_config_path(scope)
-        cfg = read_json_safe(cfg_path) or {}
-        if "mcpServers" not in cfg:
-            cfg["mcpServers"] = {}
-        cfg["mcpServers"]["agent-memory"] = {
-            "command": py_path,
-            "args": [srv_path],
-            "disabled": False,
-            "autoApprove": []
-        }
-        write_json_safe(cfg_path, cfg)
-
-        rules_path = self.get_rules_path(scope)
-        if rules_path:
-            append_rules_safe(rules_path, MEMORY_RULES_MD)
-
-        return True, f"Configured {cfg_path}"
-
-    def uninstall(self, scope: str = "user") -> Tuple[bool, str]:
-        cfg_path = self.get_config_path(scope)
-        cfg = read_json_safe(cfg_path)
-        if cfg and "mcpServers" in cfg and "agent-memory" in cfg["mcpServers"]:
-            del cfg["mcpServers"]["agent-memory"]
-            write_json_safe(cfg_path, cfg)
-        return True, f"Removed from {cfg_path}"
-
-    def generate_config(self, py_path: str, srv_path: str) -> str:
-        return json.dumps({
-            "mcpServers": {
-                "agent-memory": {
-                    "command": py_path,
-                    "args": [srv_path],
-                    "disabled": False,
-                    "autoApprove": []
-                }
-            }
-        }, indent=2)
-
-
-class RooCodeIntegration(ToolIntegration):
+class RooCodeIntegration(JsonMcpToolIntegration):
     name = "roo"
     display_name = "Roo Code (VS Code)"
+    extra_server_fields = {"disabled": False, "autoApprove": []}
 
     def _get_base_dir(self) -> Path:
         if sys.platform == "darwin":
@@ -881,55 +727,8 @@ class RooCodeIntegration(ToolIntegration):
     def get_rules_path(self, scope: str = "user") -> Optional[Path]:
         return Path.cwd() / ".roomodes"
 
-    def is_configured(self, scope: str = "user") -> bool:
-        cfg = read_json_safe(self.get_config_path(scope))
-        return cfg is not None and "agent-memory" in cfg.get("mcpServers", {})
 
-    def are_rules_installed(self, scope: str = "user") -> bool:
-        p = self.get_rules_path(scope)
-        return p is not None and p.exists() and "Agent Memory Discipline" in p.read_text(encoding="utf-8")
-
-    def install(self, py_path: str, srv_path: str, scope: str = "user") -> Tuple[bool, str]:
-        cfg_path = self.get_config_path(scope)
-        cfg = read_json_safe(cfg_path) or {}
-        if "mcpServers" not in cfg:
-            cfg["mcpServers"] = {}
-        cfg["mcpServers"]["agent-memory"] = {
-            "command": py_path,
-            "args": [srv_path],
-            "disabled": False,
-            "autoApprove": []
-        }
-        write_json_safe(cfg_path, cfg)
-
-        rules_path = self.get_rules_path(scope)
-        if rules_path:
-            append_rules_safe(rules_path, MEMORY_RULES_MD)
-
-        return True, f"Configured {cfg_path}"
-
-    def uninstall(self, scope: str = "user") -> Tuple[bool, str]:
-        cfg_path = self.get_config_path(scope)
-        cfg = read_json_safe(cfg_path)
-        if cfg and "mcpServers" in cfg and "agent-memory" in cfg["mcpServers"]:
-            del cfg["mcpServers"]["agent-memory"]
-            write_json_safe(cfg_path, cfg)
-        return True, f"Removed from {cfg_path}"
-
-    def generate_config(self, py_path: str, srv_path: str) -> str:
-        return json.dumps({
-            "mcpServers": {
-                "agent-memory": {
-                    "command": py_path,
-                    "args": [srv_path],
-                    "disabled": False,
-                    "autoApprove": []
-                }
-            }
-        }, indent=2)
-
-
-class CrushIntegration(ToolIntegration):
+class CrushIntegration(JsonMcpToolIntegration):
     name = "crush"
     display_name = "Crush"
 
@@ -942,45 +741,11 @@ class CrushIntegration(ToolIntegration):
     def get_rules_path(self, scope: str = "user") -> Optional[Path]:
         return None
 
-    def is_configured(self, scope: str = "user") -> bool:
-        cfg = read_json_safe(self.get_config_path(scope))
-        return cfg is not None and "agent-memory" in cfg.get("mcpServers", {})
-
     def are_rules_installed(self, scope: str = "user") -> bool:
         return True
 
-    def install(self, py_path: str, srv_path: str, scope: str = "user") -> Tuple[bool, str]:
-        cfg_path = self.get_config_path(scope)
-        cfg = read_json_safe(cfg_path) or {}
-        if "mcpServers" not in cfg:
-            cfg["mcpServers"] = {}
-        cfg["mcpServers"]["agent-memory"] = {
-            "command": py_path,
-            "args": [srv_path]
-        }
-        write_json_safe(cfg_path, cfg)
-        return True, f"Configured {cfg_path}"
 
-    def uninstall(self, scope: str = "user") -> Tuple[bool, str]:
-        cfg_path = self.get_config_path(scope)
-        cfg = read_json_safe(cfg_path)
-        if cfg and "mcpServers" in cfg and "agent-memory" in cfg["mcpServers"]:
-            del cfg["mcpServers"]["agent-memory"]
-            write_json_safe(cfg_path, cfg)
-        return True, f"Removed from {cfg_path}"
-
-    def generate_config(self, py_path: str, srv_path: str) -> str:
-        return json.dumps({
-            "mcpServers": {
-                "agent-memory": {
-                    "command": py_path,
-                    "args": [srv_path]
-                }
-            }
-        }, indent=2)
-
-
-class PiIntegration(ToolIntegration):
+class PiIntegration(JsonMcpToolIntegration):
     name = "pi"
     display_name = "Pi"
 
@@ -993,42 +758,8 @@ class PiIntegration(ToolIntegration):
     def get_rules_path(self, scope: str = "user") -> Optional[Path]:
         return None
 
-    def is_configured(self, scope: str = "user") -> bool:
-        cfg = read_json_safe(self.get_config_path(scope))
-        return cfg is not None and "agent-memory" in cfg.get("mcpServers", {})
-
     def are_rules_installed(self, scope: str = "user") -> bool:
         return True
-
-    def install(self, py_path: str, srv_path: str, scope: str = "user") -> Tuple[bool, str]:
-        cfg_path = self.get_config_path(scope)
-        cfg = read_json_safe(cfg_path) or {}
-        if "mcpServers" not in cfg:
-            cfg["mcpServers"] = {}
-        cfg["mcpServers"]["agent-memory"] = {
-            "command": py_path,
-            "args": [srv_path]
-        }
-        write_json_safe(cfg_path, cfg)
-        return True, f"Configured {cfg_path}"
-
-    def uninstall(self, scope: str = "user") -> Tuple[bool, str]:
-        cfg_path = self.get_config_path(scope)
-        cfg = read_json_safe(cfg_path)
-        if cfg and "mcpServers" in cfg and "agent-memory" in cfg["mcpServers"]:
-            del cfg["mcpServers"]["agent-memory"]
-            write_json_safe(cfg_path, cfg)
-        return True, f"Removed from {cfg_path}"
-
-    def generate_config(self, py_path: str, srv_path: str) -> str:
-        return json.dumps({
-            "mcpServers": {
-                "agent-memory": {
-                    "command": py_path,
-                    "args": [srv_path]
-                }
-            }
-        }, indent=2)
 
 
 INTEGRATIONS: List[ToolIntegration] = [
