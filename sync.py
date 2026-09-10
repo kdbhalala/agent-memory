@@ -16,6 +16,14 @@ import threading
 import time
 from typing import Any, Dict, Optional, Tuple
 
+if hasattr(sys.stdout, "reconfigure"):
+    try:
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+
+
 from vault import (
     DATA_DIR,
     VAULT_DIR,
