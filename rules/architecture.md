@@ -20,3 +20,7 @@
 4. **Naming Standard**:
    - Do not name any internal files or modules after third-party packages.
    - Always use `SessionLayer` and `GraphLayer`.
+
+5. **Host-Native In-Flight LLM Synthesis**:
+   - Never require external LLM daemons, local weight downloads, or separate API keys.
+   - Leverage the host assistant's active model in-flight during `memory_record` tool calls to extract L2 knowledge graph triples and identify superseded rules.

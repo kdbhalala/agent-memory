@@ -55,19 +55,19 @@ Run the automated stdio protocol verification:
 ```bash
 python integrate.py test
 ```
-Verifies `initialize`, `ping`, and tools registration (`memory_recall`, `memory_recall_deep`, `memory_record`, `memory_promote`).
+Verifies `initialize`, `ping`, and tools registration (`memory_recall`, `memory_recall_deep`, `memory_record`, `memory_promote`, `memory_sync`).
 
 ---
 
-## The Four Standard MCP Tools
+## The Five Standard MCP Tools
 
-Every integrated tool gains access to four tools:
+Every integrated tool gains access to five tools:
 
 | MCP Tool | Primary Use | Example Query / Action |
 |---|---|---|
 | `memory_recall` | Fast L1 working memory search | `{"query": "auth migration", "project": "my-app"}` |
 | `memory_recall_deep` | Deep L1 + L2 knowledge graph search | `{"query": "state management architecture"}` |
-| `memory_record` | Record verified decisions & patterns | `{"text": "Always pass project parameter to worker HTTP search", "title": "Worker search scoping"}` |
+| `memory_record` | In-flight curation, graph synthesis & conflict steering | `{"text": "Use SQLite FTS5", "title": "DB Arch", "category": "architecture", "supersedes": "#101", "relations": [{"source": "App", "relation": "USES", "target": "SQLite"}]}` |
 | `memory_promote` | Curate session learnings into L2 Knowledge Graph | `{"project": "my-app", "limit": 20}` |
 | `memory_sync` | Synchronize vault with Git/GitHub & run compaction | `{"action": "sync"}` / `{"action": "dedupe"}` |
 

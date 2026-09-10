@@ -35,3 +35,21 @@ python3 integrate.py status
 # Reconfigure all installed tools
 python3 integrate.py install all
 ```
+
+### 5. Resolving Conflicting Decisions
+When an AI assistant receives a `[Notice - Potential Overlap Found]` message during `memory_record`:
+- If the new pattern overrides the older one, the assistant immediately re-invokes `memory_record` specifying `supersedes="#<id>"`.
+- You can also manually supersede an observation from the CLI:
+```bash
+python3 -c "from layers.session_layer import SessionLayer; SessionLayer(project='my-app').record(text='New decision', supersedes='#1234')"
+```
+
+### 6. Querying Superseded vs Active Rules
+By default, active rules are ranked ahead of superseded rules:
+```bash
+# Active search
+python3 recall.py "storage" --project agent-memory
+
+# Deep search including L2 knowledge graph
+python3 recall.py "storage" --project agent-memory --deep
+```

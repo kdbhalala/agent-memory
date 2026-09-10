@@ -7,9 +7,9 @@ Stores granular session observations, tool executions, and precedents.
 - `id`: INTEGER PRIMARY KEY AUTOINCREMENT
 - `memory_session_id`: TEXT
 - `project`: TEXT (indexed)
-- `type`: TEXT (decision, bugfix, observation, feature)
+- `type`: TEXT (category: `decision`, `architecture`, `pattern`, `bugfix`, `convention`, or `superseded`)
 - `title`: TEXT
-- `subtitle`: TEXT
+- `subtitle`: TEXT (contains metadata and `[SUPERSEDED by #<id>]` when archived)
 - `facts`: TEXT (JSON array of atomic fact strings)
 - `narrative`: TEXT (Full prose context)
 - `concepts`: TEXT (JSON array of tags)
@@ -25,7 +25,7 @@ Stores granular session observations, tool executions, and precedents.
 - `sync_rev`: TEXT
 
 **FTS5 Index (`observations_fts`)**:
-Full-text index on `title`, `subtitle`, `facts`, `narrative`, `concepts` with SQLite `bm25()` ranking.
+Full-text index on `title`, `subtitle`, `facts`, `narrative`, `concepts` with SQLite `bm25()` ranking. Synchronized via `AFTER INSERT` (`observations_ai`), `AFTER DELETE` (`observations_ad`), and `AFTER UPDATE` (`observations_au`) triggers. When superseded, records are downranked in search queries behind active records.
 
 ### `graph_nodes` Table (L2 Knowledge Graph)
 Stores entities and concepts.

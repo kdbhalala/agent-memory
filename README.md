@@ -112,7 +112,7 @@ graph TD
         CR["Crush / Pi"]
     end
 
-    MCP["agent-memory MCP Server (stdio)<br/><code>memory_recall</code> · <code>memory_recall_deep</code> · <code>memory_record</code> · <code>memory_promote</code>"]
+    MCP["agent-memory MCP Server (stdio)<br/><code>memory_recall</code> · <code>memory_recall_deep</code> · <code>memory_record</code> · <code>memory_promote</code> · <code>memory_sync</code>"]
 
     subgraph Storage ["Native Two-Layer Storage (Zero Dependencies)"]
         L1["L1 Working Memory (SQLite FTS5)<br/>1.82ms · BM25 Ranking · Auto-bootstrapped"]
@@ -122,17 +122,17 @@ graph TD
     CC & CU & CX & OC & AG & AD & GS & CL & CR <--> MCP
     MCP <--> L1
     MCP <--> L2
-    L1 -. "Curated Promotion (promote.py)" .-> L2
+    L1 -. "In-Flight Synthesis & Curated Promotion" .-> L2
 ```
 
 1. **L1 Working Memory (`layers/session_layer.py`)**:
    - Sub-2ms full-text search with BM25 ranking over recent session observations and tool fixes.
-   - Automatically self-bootstraps SQLite schema and triggers on first read/write.
-   - Fully compatible with `claude-mem` worker if present, but requires zero daemons to operate.
+   - Real-time conflict steering (<1ms) detecting overlapping precedents and prompting agents to resolve contradictions.
+   - Automatically self-bootstraps SQLite schema and triggers on first read/write with zero daemons required.
 2. **L2 Semantic Knowledge Graph (`layers/graph_layer.py`)**:
    - Native SQLite graph tables (`graph_nodes`, `graph_edges`) with full-text search (`FTS5`).
    - Sub-millisecond (0.35ms) multi-hop recursive graph traversal using SQL Common Table Expressions (`WITH RECURSIVE`).
-   - Zero-token heuristic entity-relation extraction + optional direct LLM semantic extraction.
+   - Host-native in-flight triple extraction during tool calls + zero-token heuristic extraction.
 
 ---
 
@@ -207,7 +207,7 @@ agent-sync init git@github.com:username/my-agent-memory-vault.git
 
 ## Supported Assistants Matrix
 
-Every integrated tool gains access to `memory_recall`, `memory_recall_deep`, `memory_record`, and `memory_promote`:
+Every integrated tool gains access to `memory_recall`, `memory_recall_deep`, `memory_record`, `memory_promote`, and `memory_sync`:
 
 | Assistant / Environment | Type | agent-memory MCP Config | Proactive Memory Discipline Rules |
 |---|---|---|---|
@@ -259,11 +259,19 @@ from recall import recall
 l1 = SessionLayer(project="my-app")
 l2 = GraphLayer(project="my-app")
 
-# Save a decision (instantly queryable across all CLI tools)
-l1.record("Always use secure_storage for JWT tokens on mobile", title="JWT Storage Rule")
+# Save a decision with in-flight graph triples and conflict detection
+res = l1.record(
+    text="Always use secure_storage for JWT tokens on mobile",
+    title="JWT Storage Rule",
+    category="architecture",
+    supersedes="#101"
+)
+
+# Ingest relations into L2 graph directly
+l2.add_edge("AuthService", "USES", "SecureStorage", "AuthService persists tokens in SecureStorage")
 
 # Fast L1 working memory search (<2ms)
-res = l1.search("JWT tokens")
+search_hits = l1.search("JWT tokens")
 
 # Deep multi-hop graph recall (0.35ms)
 deep_res = recall("auth storage", l1, l2, deep=True)

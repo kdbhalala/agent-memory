@@ -21,12 +21,19 @@ Tiered recall: Searches L1 session memory AND L2 durable knowledge graph.
 - **Returns**: Markdown string structured into `## recent` and `## durable`.
 
 ### 3. `memory_record`
-Persists verified technical learnings, decisions, or rules into session memory.
+Persists verified technical learnings, decisions, or rules into session memory and optionally long-term knowledge graph.
 - **Parameters**:
   - `text` (string, required): Detailed description of the decision, fix, or convention.
   - `title` (string, optional): Short descriptive title.
+  - `category` (string, optional, default: `"decision"`): One of `"architecture"`, `"pattern"`, `"bugfix"`, `"convention"`, `"decision"`.
   - `project` (string, optional): Target project name.
-- **Returns**: Confirmation message with assigned observation ID.
+  - `supersedes` (string, optional): ID (`#1234`) or keywords of an older memory that this record overrides/replaces.
+  - `relations` (array of objects, optional): Knowledge graph triples to store directly into L2 durable memory:
+    - `source` (string, required): Source concept/entity.
+    - `relation` (string, required): Relationship type (`USES`, `REPLACES`, `IMPLEMENTS`, `FORBIDS`).
+    - `target` (string, required): Target concept/entity.
+    - `fact` (string, optional): Brief statement of the relationship.
+- **Returns**: Confirmation message with assigned observation ID, count of L2 edges added, confirmation of superseded records, and an optional `[Notice - Potential Overlap Found]` steering alert if conflicting precedents exist.
 
 ### 4. `memory_promote`
 Curates high-signal items from working memory into the knowledge graph.

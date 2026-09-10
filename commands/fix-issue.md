@@ -16,4 +16,4 @@ Standard workflow for investigating and fixing issues in `agent-memory`:
    python3 test_offline.py && python3 eval_l1.py && python3 eval_l2.py && python3 integrate.py test
    ```
 5. **Record Learning**:
-   - Call `memory_record(text="...", title="Root cause & fix", project="agent-memory")` so other assistants know about the fix.
+   - Call `memory_record(text="...", title="Root cause & fix", project="agent-memory", category="bugfix", supersedes="...", relations=[...])` so all coding assistants recall the fix and knowledge graph is updated.
