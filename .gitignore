@@ -5,3 +5,7 @@ __pycache__/
 promoted.json
 uv.lock
 .DS_Store
+results_*.json
+*.db
+*.sqlite
+benchmarks/results/

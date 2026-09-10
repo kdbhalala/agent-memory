@@ -65,10 +65,14 @@ def call_tool(name, args):
         if not query:
             return "(empty query)"
         try:
-            from layers.cognee_layer import CogneeLayer
-            l2: MemoryLayer | None = CogneeLayer()
+            from layers.graph_layer import GraphLayer
+            l2: MemoryLayer | None = GraphLayer(project=project)
         except Exception:
-            l2 = None
+            try:
+                from layers.cognee_layer import CogneeLayer
+                l2 = CogneeLayer()
+            except Exception:
+                l2 = None
         r = recall(query, l1, l2, limit=limit, deep=True)
         out = "## recent\n" + _hits_text(r["recent"])
         if r["durable"]:
@@ -84,11 +88,12 @@ def call_tool(name, args):
         res = l1.record(text=text, title=title, project=project)
         return res.get("message", f"Memory saved as observation #{res.get('id')}")
     if name == "memory_promote":
-        from layers.cognee_layer import CogneeLayer
+        from layers.graph_layer import GraphLayer
         import promote
         batch_limit = int(args.get("limit", 20) or 20)
-        fresh = promote.promote(CogneeLayer(), project=project, limit=batch_limit)
-        return f"promoted {len(fresh)} items"
+        l2 = GraphLayer(project=project)
+        fresh = promote.promote(l2, project=project, limit=batch_limit)
+        return f"promoted {len(fresh)} items to knowledge graph"
     raise ValueError(f"unknown tool {name}")
 
 

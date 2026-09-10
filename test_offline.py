@@ -141,5 +141,28 @@ for tool in integrate.INTEGRATIONS:
     cfg_snip = tool.generate_config("python3", "mcp_server.py")
     assert "agent-memory" in cfg_snip
 
+# test native GraphLayer
+from layers.graph_layer import GraphLayer
+with tempfile.TemporaryDirectory() as tmp_dir:
+    g_db = Path(tmp_dir) / "graph_test.db"
+    gl = GraphLayer(db_path=g_db)
+    gl.add_node("ServiceA", "service", "Core API Service", project="p1")
+    gl.add_node("JWT", "auth", "JSON Web Tokens", project="p1")
+    gl.add_edge("ServiceA", "USES", "JWT", "ServiceA issues JWT for auth", project="p1")
+    gl.add_edge("JWT", "STORED_IN", "Keystore", "JWT stored in encrypted keystore", project="p1")
+    
+    g_hits = gl.search("auth", limit=5)
+    assert len(g_hits) >= 1, f"Expected hits for 'auth', got {g_hits}"
+    assert "ServiceA" in g_hits[0].text
+    
+    # Test heuristic extraction via add()
+    gl.add("[p1] ServiceB uses Redis for session caching")
+    b_hits = gl.search("redis session", limit=5)
+    assert len(b_hits) >= 1
+    
+    st = gl.stats()
+    assert st["nodes"] >= 4 and st["edges"] >= 3
+
 print("layers OK")
 print("integrate tests OK")
+print("graph tests OK")

@@ -1,11 +1,33 @@
 [project]
 name = "agent-memory"
 version = "0.1.0"
+description = "Turnkey zero-dependency two-layer memory architecture (SQLite FTS5 + Recursive Knowledge Graph) with MCP server for Claude Code, Cursor, Codex, OpenCode, and more"
+readme = "README.md"
 requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "Krunal Bhalala" }]
+keywords = ["mcp", "ai-memory", "knowledge-graph", "claude-code", "cursor", "codex", "opencode", "llm", "sqlite"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
 dependencies = []
 
 [project.optional-dependencies]
 cognee = ["cognee"]
 
 [project.scripts]
+agent-memory = "mcp_server:main"
 agent-integrate = "integrate:main"
+agent-recall = "recall:main"
+
+[project.urls]
+Homepage = "https://github.com/kdbhalala/agent-memory"
+Repository = "https://github.com/kdbhalala/agent-memory"
+Issues = "https://github.com/kdbhalala/agent-memory/issues"

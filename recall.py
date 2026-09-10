@@ -10,6 +10,14 @@ def recall(query: str, l1: MemoryLayer, l2: MemoryLayer | None = None,
            limit: int = 5, deep: bool = False) -> dict[str, list[Hit]]:
     recent = l1.search(query, limit=limit)
     result: dict[str, list[Hit]] = {"recent": recent, "durable": []}
+    
+    if l2 is None:
+        try:
+            from layers.graph_layer import GraphLayer
+            l2 = GraphLayer(project=getattr(l1, "project", None))
+        except Exception:
+            l2 = None
+
     if l2 is not None and (deep or len(recent) < 2):
         try:
             result["durable"] = l2.search(query, limit=limit)
@@ -27,16 +35,20 @@ if __name__ == "__main__":
     parser.add_argument("--project", "-p", default=None, help="Filter by project name")
     parser.add_argument("--limit", "-l", type=int, default=5, help="Hit limit (default 5)")
     parser.add_argument("--deep", "-d", action="store_true", help="Force deep recall from durable layer")
+    parser.add_argument("--cognee", action="store_true", help="Use Cognee instead of native SQLite graph")
     args = parser.parse_args()
 
     l1 = ClaudeMemLayer(project=args.project)
     l2 = None
-    if args.deep:
+    if args.cognee:
         try:
             from layers.cognee_layer import CogneeLayer
             l2 = CogneeLayer()
         except Exception as exc:
-            print(f"(note: L2 unavailable: {exc})")
+            print(f"(note: Cognee unavailable: {exc})")
+    else:
+        from layers.graph_layer import GraphLayer
+        l2 = GraphLayer(project=args.project)
 
     res = recall(args.query, l1, l2, limit=args.limit, deep=args.deep)
     print(f"## recent ({len(res['recent'])})")

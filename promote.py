@@ -4,10 +4,13 @@ state file. Pass any object with .add(text) as l2 (CogneeLayer or fake).
 """
 import hashlib
 import json
+import os
 import sqlite3
 from pathlib import Path
 
-DB = Path.home() / ".claude-mem" / "claude-mem.db"
+from layers.claudemem import get_default_db
+
+DB = get_default_db()
 STATE = Path(__file__).parent / "promoted.json"
 DURABLE_TYPES = {"decision", "bugfix", "feature"}
 DURABLE_CONCEPTS = {"why-it-exists", "pattern", "gotcha", "trade-off", "how-it-works"}
@@ -32,6 +35,8 @@ def _save_state(seen: set) -> None:
 
 def collect(project: str | None = None, since_epoch: int = 0) -> list[str]:
     """Distilled candidate texts: session learnings + durable observations."""
+    if not DB.exists():
+        return []
     con = sqlite3.connect(f"file:{DB}?mode=ro", uri=True)
     out: list[str] = []
     q = "SELECT project, learned, completed FROM session_summaries WHERE created_at_epoch > ?"
@@ -80,6 +85,8 @@ if __name__ == "__main__":
                         help="Preview candidates without invoking L2 or modifying state")
     parser.add_argument("--limit", "-l", type=int, default=None,
                         help="Max items to promote/preview")
+    parser.add_argument("--cognee", action="store_true",
+                        help="Use legacy Cognee instead of native SQLite knowledge graph")
     args = parser.parse_args()
 
     seen = _load_state()
@@ -101,7 +108,13 @@ if __name__ == "__main__":
         if not fresh:
             print("Nothing new to promote.")
         else:
-            from layers.cognee_layer import CogneeLayer
-            l2 = CogneeLayer()
+            if args.cognee:
+                from layers.cognee_layer import CogneeLayer
+                l2 = CogneeLayer()
+                label = "Cognee"
+            else:
+                from layers.graph_layer import GraphLayer
+                l2 = GraphLayer(project=args.project)
+                label = "native SQLite knowledge graph"
             promoted = promote(l2, project=args.project, limit=args.limit)
-            print(f"Successfully promoted {len(promoted)} item(s) to L2.")
+            print(f"Successfully promoted {len(promoted)} item(s) to {label}.")

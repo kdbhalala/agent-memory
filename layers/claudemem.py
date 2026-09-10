@@ -7,14 +7,28 @@ direct SQLite FTS if the worker is down.
 import json
 import re
 import sqlite3
+import os
 import urllib.parse
 import urllib.request
 from pathlib import Path
 
 from .base import Hit, MemoryLayer
 
-WORKER = "http://127.0.0.1:37777"
-DB = Path.home() / ".claude-mem" / "claude-mem.db"
+WORKER = os.environ.get("CLAUDE_MEM_WORKER", "http://127.0.0.1:37777")
+CLAUDE_MEM_DB = Path.home() / ".claude-mem" / "claude-mem.db"
+DEFAULT_DB = Path.home() / ".agent-memory" / "memory.db"
+
+
+def get_default_db() -> Path:
+    env_path = os.getenv("AGENT_MEMORY_DB") or os.getenv("CLAUDE_MEM_DB")
+    if env_path:
+        return Path(env_path)
+    if CLAUDE_MEM_DB.exists():
+        return CLAUDE_MEM_DB
+    return DEFAULT_DB
+
+
+DB = get_default_db()
 
 
 STOPWORDS = frozenset(
@@ -26,9 +40,40 @@ STOPWORDS = frozenset(
 class ClaudeMemLayer(MemoryLayer):
     name = "claude-mem"
 
-    def __init__(self, worker: str = WORKER, project: str | None = None):
+    def __init__(self, worker: str = WORKER, project: str | None = None,
+                 db_path: Path | str | None = None):
         self.worker = worker
         self.project = project
+        self.db_path = Path(db_path) if db_path else DB
+
+    @staticmethod
+    def _init_db(db_path: Path) -> None:
+        """Self-bootstrap local SQLite FTS5 schema if running standalone."""
+        db_path.parent.mkdir(parents=True, exist_ok=True)
+        con = sqlite3.connect(db_path)
+        con.execute("""
+            CREATE TABLE IF NOT EXISTS observations (
+                id INTEGER PRIMARY KEY AUTOINCREMENT, memory_session_id TEXT, project TEXT,
+                type TEXT, title TEXT, subtitle TEXT, facts TEXT, narrative TEXT,
+                concepts TEXT, files_read TEXT, files_modified TEXT, prompt_number INT,
+                discovery_tokens INT, created_at TEXT, created_at_epoch INT, content_hash TEXT,
+                generated_by_model TEXT, relevance_count INT, sync_rev TEXT
+            )
+        """)
+        con.execute("""
+            CREATE VIRTUAL TABLE IF NOT EXISTS observations_fts USING fts5(
+                title, subtitle, facts, narrative, concepts,
+                content='observations', content_rowid='id'
+            )
+        """)
+        con.execute("""
+            CREATE TRIGGER IF NOT EXISTS observations_ai AFTER INSERT ON observations BEGIN
+                INSERT INTO observations_fts(rowid, title, subtitle, facts, narrative, concepts)
+                VALUES (new.id, new.title, new.subtitle, new.facts, new.narrative, new.concepts);
+            END
+        """)
+        con.commit()
+        con.close()
 
     def search(self, query: str, limit: int = 5) -> list[Hit]:
         # Plain reciprocal rank fusion over both rankers. Measured 9/10 on
@@ -78,9 +123,9 @@ class ClaudeMemLayer(MemoryLayer):
         return self._bodies_by_id(ids)
 
     def _bodies_by_id(self, ids: list[str]) -> list[Hit]:
-        if not ids or not DB.exists():
+        if not ids or not self.db_path.exists():
             return []
-        con = sqlite3.connect(f"file:{DB}?mode=ro", uri=True)
+        con = sqlite3.connect(f"file:{self.db_path}?mode=ro", uri=True)
         ph = ",".join("?" for _ in ids)
         sql = ("SELECT id, project, title, facts, narrative FROM observations "
                f"WHERE id IN ({ph})")
@@ -97,14 +142,14 @@ class ClaudeMemLayer(MemoryLayer):
         return [by_id[str(i)] for i in ids if str(i) in by_id]
 
     def _via_sqlite(self, query: str, limit: int) -> list[Hit]:
-        if not DB.exists():
+        if not self.db_path.exists():
             return []
         tokens = [t for t in re.findall(r"[a-z0-9]+", query.lower())
                   if len(t) > 2 and t not in STOPWORDS] or re.findall(
                       r"[a-z0-9]+", query.lower())
         if not tokens:
             return []
-        con = sqlite3.connect(f"file:{DB}?mode=ro", uri=True)
+        con = sqlite3.connect(f"file:{self.db_path}?mode=ro", uri=True)
         sql = """SELECT observations.id FROM observations_fts
                  JOIN observations ON observations.id = observations_fts.rowid
                  WHERE observations_fts MATCH ?"""
@@ -148,9 +193,9 @@ class ClaudeMemLayer(MemoryLayer):
         except Exception:
             pass
 
-        # Fallback: direct SQLite insertion
-        if not DB.exists():
-            raise RuntimeError(f"Database {DB} does not exist and worker is offline")
+        # Fallback: direct SQLite insertion (self-bootstraps schema if needed)
+        if not self.db_path.exists():
+            self._init_db(self.db_path)
         import hashlib
         import time
         import uuid
@@ -160,7 +205,7 @@ class ClaudeMemLayer(MemoryLayer):
         session_id = str(uuid.uuid4())
         content_hash = hashlib.sha256(text.encode()).hexdigest()[:16]
 
-        con = sqlite3.connect(DB)
+        con = sqlite3.connect(self.db_path)
         cur = con.cursor()
         cur.execute("""
             INSERT INTO observations (

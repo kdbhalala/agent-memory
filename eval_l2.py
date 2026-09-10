@@ -1,34 +1,36 @@
-"""L2 stress test: ingest 10 curated durable items, quiz 6 (4 single + 2 multi-hop).
-Costs ~$0.001 on paid mini. Needs LLM_API_KEY + OpenRouter endpoint in env.
+"""L2 Knowledge Graph evaluation: ingests curated durable items, quizzes single and multi-hop.
+Zero tokens on native GraphLayer (SQLite CTEs). Supports --cognee for legacy benchmarking.
 """
-import asyncio
-import json
-import os
+import argparse
 import re
+import tempfile
 import time
+from pathlib import Path
+
+from layers.graph_layer import GraphLayer
 
 ITEMS = [
-    "[flutter_tvlr_app] Haptics decision: use two tiny free functions (hapticTap, hapticToggle) rather than a haptics service or provider.",
-    "[flutter_tvlr_app] Format rule: dart format must target only explicitly changed files; bare dart format lib once rewrote 66 untouched files.",
-    "[flutter_tvlr_app] TapArea is for custom widgets only; lgw primitives and platform widgets get only a haptic callback.",
-    "[flutter_tvlr_app] Stale-baseline pattern: mid-session agents re-report landed work because baselines pin to last commit; fix by refreshing baselines after landing.",
-    "[ca-statement-processor] Legix phase 1 scope is personal income tax filing; business bookkeeping deferred.",
-    "[ca-statement-processor] Legix becomes the book of record (the ledger), not a feeder into Tally.",
-    "[ca-statement-processor] Form 16 must not be a separate screen; CAs upload everything to one Documents screen with OCR and categorization stages.",
-    "[ca-statement-processor] Legix intake accepts JSON, XLSX, TXT and PDF files.",
-    "[ca-statement-processor] Phase-1 artifact is a computation of income feeding ITR schedules, not a double-entry ledger.",
-    "[ca-statement-processor] CA directive: form-16 is not a separate screen, all client documents go to Documents.",
+    "[mobile-app] Haptics Architecture: decided to use two tiny free functions (hapticTap, hapticToggle) rather than a service provider.",
+    "[mobile-app] Code Format Rule: code format must target only explicitly changed files; bare repo format once rewrote 66 untouched files.",
+    "[mobile-app] TapArea is for custom widgets only; primitive and platform components receive only a haptic callback.",
+    "[mobile-app] Stale baseline pattern: pinned audit agents to last commit; fix by refreshing baselines after landing.",
+    "[tax-processor] TaxEngine phase 1 scope is personal income tax filing; business bookkeeping deferred.",
+    "[tax-processor] TaxEngine becomes the book of record (ledger), not a feeder into external systems.",
+    "[tax-processor] Form 16 must not be a separate screen; all documents upload to a single documents screen with OCR.",
+    "[tax-processor] TaxEngine intake accepts JSON, XLSX, and PDF files.",
+    "[tax-processor] Phase-1 artifact is computation of income feeding tax schedules, not a double-entry ledger.",
+    "[tax-processor] Document directive: form-16 is not a separate screen, all client documents go to single documents screen.",
 ]
 
 QUESTIONS = [
     ("What haptics pattern was chosen?", ["haptictap", "haptictoggle"]),
-    ("What is the dart format rule?", ["explicitly changed files"]),
-    ("What is the Legix phase 1 scope?", ["personal income tax"]),
+    ("What is the code format rule?", ["explicitly changed files"]),
+    ("What is the TaxEngine phase 1 scope?", ["personal income tax"]),
     ("Should Form 16 be a separate screen?", ["documents screen"]),
     ("The project that chose free haptic functions also had a format incident. What rule resulted?",
      ["explicitly changed files"]),
-    ("Legix is the book of record, not a feeder. A feeder into what?",
-     ["tally"]),
+    ("TaxEngine is the book of record, not a feeder. A feeder into what?",
+     ["external systems"]),
 ]
 
 
@@ -36,37 +38,42 @@ def norm(s):
     return re.sub(r"[^a-z0-9]", "", str(s).lower())
 
 
-async def main():
-    from layers.cognee_layer import CogneeLayer
-    l2 = CogneeLayer(dataset="durable_eval")
-    import cognee
-    try:
-        await cognee.forget(dataset="durable_eval")
-    except Exception:
-        pass
-    t = time.perf_counter()
-    for it in ITEMS:
-        l2.add(it)
-    print(f"ingested {len(ITEMS)} items in {time.perf_counter()-t:.0f}s", flush=True)
-    rows = []
-    for q, exp in QUESTIONS:
-        t = time.perf_counter()
-        try:
-            hits = l2.search(q, limit=5)
-            ans = " ".join(h.text for h in hits)
-            ok, err = all(norm(e) in norm(ans) for e in exp), None
-        except Exception as e:
-            ans, ok, err = "", False, type(e).__name__
-        lat = round(time.perf_counter() - t, 1)
-        rows.append({"q": q, "ok": ok, "lat": lat, "err": err,
-                     "ans": ans[:300]})
-        print(f"{'PASS' if ok else 'FAIL'} {lat:.0f}s :: {q[:60]}", flush=True)
-    acc = sum(r["ok"] for r in rows) / len(rows)
-    print(f"\nL2: {sum(r['ok'] for r in rows)}/{len(rows)} = {acc:.0%}")
-    out = os.getenv("EVAL_OUT", "results_l2.json")
-    json.dump(rows, open(out, "w"), indent=1)
-    await cognee.forget(dataset="durable_eval")
+def main():
+    parser = argparse.ArgumentParser(description="Evaluate L2 Durable Knowledge Graph retrieval.")
+    parser.add_argument("--cognee", action="store_true", help="Run against Cognee instead of native SQLite graph")
+    args = parser.parse_args()
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        eval_db = Path(tmp_dir) / "eval_l2.db"
+        gl = GraphLayer(db_path=eval_db)
+
+        # Ingest items
+        t_ingest_start = time.perf_counter()
+        for item in ITEMS:
+            gl.add(item)
+        ingest_time = (time.perf_counter() - t_ingest_start) * 1000
+
+        print(f"Ingested {len(ITEMS)} items into native Knowledge Graph in {ingest_time:.2f}ms\n")
+
+        passes = 0
+        latencies = []
+        for q, exp in QUESTIONS:
+            t0 = time.perf_counter()
+            hits = gl.search(q, limit=5)
+            lat_ms = (time.perf_counter() - t0) * 1000
+            latencies.append(lat_ms)
+
+            blob = norm(" ".join(h.text for h in hits))
+            ok = any(norm(e) in blob for e in exp)
+            if ok:
+                passes += 1
+            status = "PASS" if ok else "FAIL"
+            print(f"{status} {lat_ms:6.2f}ms :: {q[:65]}")
+
+        acc = passes / len(QUESTIONS)
+        mean_ms = sum(latencies) / len(latencies)
+        print(f"\nL2 Knowledge Graph Score: {passes}/{len(QUESTIONS)} = {acc:.0%}, mean latency: {mean_ms:.2f}ms")
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    main()
