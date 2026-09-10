@@ -95,7 +95,6 @@ def bootstrap_from_existing_claudemem(
     s_db = Path(session_db) if session_db else SESSION_DB
     s_db.parent.mkdir(parents=True, exist_ok=True)
 
-    # Check if local session_db already has rows
     con_target = sqlite3.connect(s_db)
     con_target.execute("""
         CREATE TABLE IF NOT EXISTS observations (
@@ -106,40 +105,61 @@ def bootstrap_from_existing_claudemem(
             generated_by_model TEXT, relevance_count INT, sync_rev TEXT
         )
     """)
-    target_count = con_target.execute("SELECT COUNT(*) FROM observations").fetchone()[0]
-    if target_count > 0:
-        con_target.close()
-        return 0
+    cur_dst = con_target.execute("PRAGMA table_info(observations)")
+    dst_cols = [r[1] for r in cur_dst.fetchall()]
 
-    # Read from legacy DB
     con_src = sqlite3.connect(f"file:{LEGACY_CLAUDE_MEM_DB}?mode=ro", uri=True)
-    cursor = con_src.cursor()
+    con_src.row_factory = sqlite3.Row
     try:
-        cursor.execute("SELECT * FROM observations")
-        col_names = [d[0] for d in cursor.description]
-        rows = cursor.fetchall()
+        rows = con_src.execute("SELECT * FROM observations").fetchall()
     except Exception:
         con_src.close()
         con_target.close()
         return 0
-    con_src.close()
 
     if not rows:
+        con_src.close()
         con_target.close()
         return 0
 
-    placeholders = ", ".join(["?"] * len(col_names))
-    cols_str = ", ".join(col_names)
-    con_target.executemany(
-        f"INSERT OR IGNORE INTO observations ({cols_str}) VALUES ({placeholders})",
-        rows
-    )
+    cols_str = ", ".join(dst_cols)
+    ph = ", ".join("?" for _ in dst_cols)
+
+    batch = []
+    for r in rows:
+        row_dict = dict(r)
+        if not row_dict.get("narrative") and row_dict.get("text"):
+            row_dict["narrative"] = row_dict["text"]
+        vals = [row_dict.get(c) for c in dst_cols]
+        batch.append(vals)
+
+    con_target.executemany(f"INSERT OR IGNORE INTO observations ({cols_str}) VALUES ({ph})", batch)
+
+    con_target.execute("""
+        CREATE TABLE IF NOT EXISTS session_summaries (
+            id INTEGER PRIMARY KEY AUTOINCREMENT, memory_session_id TEXT, project TEXT,
+            learned TEXT, completed TEXT, next_steps TEXT, created_at TEXT, created_at_epoch INT
+        )
+    """)
+    try:
+        s_rows = con_src.execute("SELECT * FROM session_summaries").fetchall()
+        s_cols = ["id", "memory_session_id", "project", "learned", "completed", "next_steps", "created_at", "created_at_epoch"]
+        s_batch = []
+        for sr in s_rows:
+            sd = dict(sr)
+            s_batch.append([sd.get(c) for c in s_cols])
+        s_cols_str = ", ".join(s_cols)
+        s_ph = ", ".join("?" for _ in s_cols)
+        con_target.executemany(f"INSERT OR IGNORE INTO session_summaries ({s_cols_str}) VALUES ({s_ph})", s_batch)
+    except Exception:
+        pass
+
     con_target.commit()
+    con_src.close()
     con_target.close()
 
-    # Also export directly into vault JSONL
     export_dirty_to_vault(vault_dir=v_dir, session_db=s_db)
-    return len(rows)
+    return len(batch)
 
 
 def export_dirty_to_vault(
