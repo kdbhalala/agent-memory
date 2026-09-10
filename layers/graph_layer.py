@@ -179,11 +179,17 @@ class GraphLayer(MemoryLayer):
         con.commit()
         con.close()
 
-        # Export to vault and trigger background sync
+        # Fast append to vault (<0.1ms) and trigger debounced background sync
         try:
-            from vault import export_dirty_to_vault
+            from vault import append_edge_to_vault
             from sync import schedule_auto_sync
-            export_dirty_to_vault(graph_db=self.db_path)
+            append_edge_to_vault({
+                "source": s,
+                "relation": r,
+                "target": t,
+                "fact": f,
+                "project": proj
+            })
             schedule_auto_sync()
         except Exception:
             pass

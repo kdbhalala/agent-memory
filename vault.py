@@ -162,6 +162,48 @@ def bootstrap_from_existing_claudemem(
     return len(batch)
 
 
+def append_observation_to_vault(obs_dict: dict, vault_dir: Path | str | None = None) -> bool:
+    """Fast-path append a single newly created observation directly to vault JSONL in <0.1ms."""
+    try:
+        v_dir = init_vault(vault_dir)
+        obs_file = v_dir / "observations.jsonl"
+        ch = obs_dict.get("content_hash") or obs_dict.get("guid")
+        if not ch:
+            ch = compute_guid(
+                obs_dict.get("project") or "",
+                obs_dict.get("title") or "",
+                (obs_dict.get("narrative") or "") + (obs_dict.get("facts") or "")
+            )
+        d = dict(obs_dict)
+        d["guid"] = ch
+        d["content_hash"] = ch
+        line = json.dumps(d, ensure_ascii=False) + "\n"
+        with open(obs_file, "a", encoding="utf-8") as f:
+            f.write(line)
+        return True
+    except Exception:
+        return False
+
+
+def append_edge_to_vault(edge_dict: dict, vault_dir: Path | str | None = None) -> bool:
+    """Fast-path append a single newly created graph edge directly to vault JSONL in <0.1ms."""
+    try:
+        v_dir = init_vault(vault_dir)
+        graph_file = v_dir / "graph.jsonl"
+        proj = edge_dict.get("project") or "global"
+        key = f"edge:{proj}:{edge_dict['source'].lower()}:{edge_dict['relation'].upper()}:{edge_dict['target'].lower()}:{edge_dict.get('fact', '')}"
+        d = dict(edge_dict)
+        d["kind"] = "edge"
+        d["key"] = key
+        d["project"] = proj
+        line = json.dumps(d, ensure_ascii=False) + "\n"
+        with open(graph_file, "a", encoding="utf-8") as f:
+            f.write(line)
+        return True
+    except Exception:
+        return False
+
+
 def export_dirty_to_vault(
     vault_dir: Path | str | None = None,
     session_db: Path | str | None = None,

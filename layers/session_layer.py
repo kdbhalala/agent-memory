@@ -176,6 +176,22 @@ class SessionLayer(MemoryLayer):
         sql += " ORDER BY (CASE WHEN observations.type = 'superseded' THEN 1 ELSE 0 END) ASC, rank LIMIT ?"
         args.append(limit)
         rows = con.execute(sql, args).fetchall()
+
+        # Fallback: prefix wildcard matching if standard query returned 0 rows
+        if not rows and tokens:
+            prefix_tokens = [f'"{t}"*' for t in tokens if len(t) >= 3]
+            if prefix_tokens:
+                sql_pfx = """SELECT observations.id FROM observations_fts
+                             JOIN observations ON observations.id = observations_fts.rowid
+                             WHERE observations_fts MATCH ?"""
+                args_pfx = [" OR ".join(prefix_tokens)]
+                if self.project:
+                    sql_pfx += " AND project = ?"
+                    args_pfx.append(self.project)
+                sql_pfx += " ORDER BY (CASE WHEN observations.type = 'superseded' THEN 1 ELSE 0 END) ASC, rank LIMIT ?"
+                args_pfx.append(limit)
+                rows = con.execute(sql_pfx, args_pfx).fetchall()
+
         con.close()
         return self._bodies_by_id([str(i) for (i,) in rows])
 
@@ -333,11 +349,30 @@ class SessionLayer(MemoryLayer):
         con.commit()
         con.close()
 
-        # Export to vault and trigger background sync
+        # Fast append to vault (<0.1ms) and trigger debounced background sync
         try:
-            from vault import export_dirty_to_vault
+            from vault import append_observation_to_vault
             from sync import schedule_auto_sync
-            export_dirty_to_vault(session_db=self.db_path)
+            append_observation_to_vault({
+                "memory_session_id": session_id,
+                "project": proj,
+                "type": cat,
+                "title": tit,
+                "subtitle": "Recorded via agent-memory",
+                "facts": json.dumps([text]),
+                "narrative": text,
+                "concepts": json.dumps([cat, "pattern"]),
+                "files_read": "[]",
+                "files_modified": "[]",
+                "prompt_number": 1,
+                "discovery_tokens": 0,
+                "created_at": now_iso,
+                "created_at_epoch": now_epoch,
+                "content_hash": content_hash,
+                "generated_by_model": "agent-memory",
+                "relevance_count": 0,
+                "sync_rev": "1"
+            })
             schedule_auto_sync()
         except Exception:
             pass
