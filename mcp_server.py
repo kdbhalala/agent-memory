@@ -44,6 +44,12 @@ TOOLS = [
                      "properties": {"project": {"type": "string", "description": "Optional project filter"},
                                     "limit": {"type": "integer", "default": 20, "description": "Max candidates to promote"}},
                      "required": []}},
+    {"name": "memory_sync",
+     "description": "Synchronize memory vault with Git/GitHub remote or run periodic compaction.",
+     "inputSchema": {"type": "object",
+                     "properties": {"action": {"type": "string", "enum": ["sync", "status", "dedupe"], "default": "sync",
+                                               "description": "Sync action: 'sync' (bidirectional git sync), 'status' (check sync state), or 'dedupe' (compact and prune redundant memories)"}},
+                     "required": []}},
 ]
 
 
@@ -90,6 +96,23 @@ def call_tool(name, args):
         l2 = GraphLayer(project=project)
         fresh = promote.promote(l2, project=project, limit=batch_limit)
         return f"promoted {len(fresh)} items to knowledge graph"
+    if name == "memory_sync":
+        import sync
+        import vault
+        action = str(args.get("action", "sync")).lower()
+        if action == "status":
+            st = sync.sync_status()
+            return (f"Vault: {st['vault_dir']}\n"
+                    f"Remote: {st['remote_url'] or '(none)'}\n"
+                    f"Status: {st['last_sync_status']}\n"
+                    f"Auto-sync: {st['auto_sync']}")
+        elif action == "dedupe":
+            d = vault.deduplicate_and_compact()
+            sync.schedule_auto_sync()
+            return f"Compacted vault: {d['observations_pruned']} observations pruned, {d['graph_pruned']} graph items pruned."
+        else:
+            r = sync.sync(push=True, pull=True)
+            return f"Sync complete. Status: {r['status']}. Committed: {r['committed']}, Pulled: {r['pulled']}, Pushed: {r['pushed']}."
     raise ValueError(f"unknown tool {name}")
 
 
@@ -116,6 +139,14 @@ def main():
                 reply(mid, {"protocolVersion": "2024-11-05",
                             "capabilities": {"tools": {}},
                             "serverInfo": {"name": "agent-memory", "version": "0.1.0"}})
+                # Trigger initial background pull to sync multi-device memories
+                try:
+                    import threading
+                    import sync
+                    t = threading.Thread(target=sync.sync, kwargs={"push": False, "pull": True}, daemon=True)
+                    t.start()
+                except Exception:
+                    pass
             elif method == "ping":
                 reply(mid, {})
             elif method == "tools/list":

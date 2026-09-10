@@ -179,6 +179,15 @@ class GraphLayer(MemoryLayer):
         con.commit()
         con.close()
 
+        # Export to vault and trigger background sync
+        try:
+            from vault import export_dirty_to_vault
+            from sync import schedule_auto_sync
+            export_dirty_to_vault(graph_db=self.db_path)
+            schedule_auto_sync()
+        except Exception:
+            pass
+
     def add(self, text: str) -> None:
         """Extract entities and relations from text and ingest into the knowledge graph."""
         proj = self.project or "global"

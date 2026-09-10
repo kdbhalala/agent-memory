@@ -69,6 +69,7 @@ Every integrated tool gains access to four tools:
 | `memory_recall_deep` | Deep L1 + L2 knowledge graph search | `{"query": "state management architecture"}` |
 | `memory_record` | Record verified decisions & patterns | `{"text": "Always pass project parameter to worker HTTP search", "title": "Worker search scoping"}` |
 | `memory_promote` | Curate session learnings into L2 Knowledge Graph | `{"project": "my-app", "limit": 20}` |
+| `memory_sync` | Synchronize vault with Git/GitHub & run compaction | `{"action": "sync"}` / `{"action": "dedupe"}` |
 
 ---
 

@@ -23,6 +23,7 @@ dependencies = []
 agent-memory = "mcp_server:main"
 agent-integrate = "integrate:main"
 agent-recall = "recall:main"
+agent-sync = "sync:main"
 
 [project.urls]
 Homepage = "https://github.com/kdbhalala/agent-memory"

@@ -1091,6 +1091,156 @@ def cmd_install(args: argparse.Namespace) -> None:
         status_icon = "✓" if success else "✗"
         print(f"[{status_icon}] {tool.display_name:22}: {msg}")
 
+    if not getattr(args, "skip_sync", False):
+        setup_sync_interactive(
+            non_interactive=getattr(args, "yes", False),
+            auto_gh=getattr(args, "auto_gh", False)
+        )
+
+
+def setup_sync_interactive(non_interactive: bool = False, auto_gh: bool = False) -> None:
+    """Detect GitHub CLI and setup seamless cross-device synchronization."""
+    import sync
+    import vault
+
+    v_dir = vault.init_vault()
+    vault.bootstrap_from_existing_claudemem()
+
+    cfg = sync.load_sync_config()
+    if cfg.get("remote_url"):
+        print(f"\n[✓] Vault Sync: Connected to {cfg['remote_url']} (auto-sync enabled)\n")
+        return
+
+    # Check GitHub CLI
+    gh_info = sync.check_gh()
+    if gh_info["installed"] and gh_info["authenticated"]:
+        user_str = f"@{gh_info['username']}" if gh_info['username'] else "authenticated user"
+        print("\n" + "=" * 70)
+        print("  Agent Memory Multi-Device Sync Setup")
+        print("=" * 70)
+        print(f"[✓] GitHub CLI (gh) detected: Logged in as {user_str}")
+        print("Automatic Git Sync keeps your AI assistant's memories synchronized")
+        print("across all your laptops and devices using a private GitHub repository.\n")
+
+        if auto_gh:
+            choice = "y"
+        elif non_interactive or not sys.stdin.isatty():
+            print("Non-interactive mode: initializing local vault (connect remote anytime via 'agent-integrate sync init').")
+            sync.init_git_repo(v_dir)
+            return
+        else:
+            try:
+                ans = input("Create private GitHub repo 'agent-memory-vault' and enable automatic sync? [Y/n]: ").strip().lower()
+                choice = ans if ans else "y"
+            except (EOFError, KeyboardInterrupt):
+                print()
+                choice = "n"
+
+        if choice in ("y", "yes"):
+            print("Creating private GitHub repository 'agent-memory-vault'...")
+            ok, msg = sync.setup_gh_repo(vault_dir=v_dir, repo_name="agent-memory-vault", private=True)
+            if ok:
+                print(f"[✓] {msg}")
+                print("[✓] Automatic background sync enabled. All coding tools will stay in sync!\n")
+            else:
+                print(f"[!] {msg}")
+                print("Vault initialized locally. You can connect a remote later via 'agent-integrate sync init <url>'.\n")
+            return
+        else:
+            print("\nOptions for cross-device sync:")
+            print("  1. Connect an existing Git remote URL")
+            print("  2. Keep local-only for now")
+            try:
+                opt = input("Choice [1/2] (default: 2): ").strip()
+            except (EOFError, KeyboardInterrupt):
+                opt = "2"
+            if opt == "1":
+                try:
+                    url = input("Enter Git remote URL: ").strip()
+                except (EOFError, KeyboardInterrupt):
+                    url = ""
+                if url:
+                    ok, msg = sync.setup_git_remote(url, vault_dir=v_dir)
+                    print(f"[{'✓' if ok else '!'}] {msg}\n")
+                    return
+            print("Vault initialized locally with Git tracking. (Run 'agent-integrate sync init' anytime).\n")
+            sync.init_git_repo(v_dir)
+            return
+
+    # gh not available or not logged in
+    if non_interactive or not sys.stdin.isatty():
+        sync.init_git_repo(v_dir)
+        return
+
+    print("\n" + "=" * 70)
+    print("  Agent Memory Multi-Device Sync Setup")
+    print("=" * 70)
+    print("Cross-device sync allows your agents to share memory across multiple machines.")
+    print("Options:")
+    print("  1. Connect an existing Git remote URL (e.g. git@github.com:user/my-vault.git)")
+    print("  2. Keep local-only for now")
+    try:
+        opt = input("Choice [1/2] (default: 2): ").strip()
+    except (EOFError, KeyboardInterrupt):
+        opt = "2"
+
+    if opt == "1":
+        try:
+            url = input("Enter Git remote URL: ").strip()
+        except (EOFError, KeyboardInterrupt):
+            url = ""
+        if url:
+            ok, msg = sync.setup_git_remote(url, vault_dir=v_dir)
+            print(f"[{'✓' if ok else '!'}] {msg}\n")
+            return
+
+    print("Vault initialized locally with Git tracking. (Run 'agent-integrate sync init' anytime).\n")
+    sync.init_git_repo(v_dir)
+
+
+def cmd_sync(args: argparse.Namespace) -> None:
+    """Execute sync subcommands."""
+    import sync
+    import time
+    import vault
+
+    action = getattr(args, "action", "status") or "status"
+    if action == "status":
+        st = sync.sync_status()
+        print(f"\nagent-memory Vault Status:")
+        print(f"  Directory:    {st['vault_dir']}")
+        print(f"  Git Repo:     {'✓ Yes' if st['is_git_repo'] else '✗ No'}")
+        print(f"  Remote URL:   {st['remote_url'] or '(none)'}")
+        print(f"  Auto-sync:    {'Enabled' if st['auto_sync'] else 'Disabled'}")
+        print(f"  Sync Status:  {st['last_sync_status']}")
+        if st["last_sync_epoch"]:
+            t_str = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(st["last_sync_epoch"]))
+            print(f"  Last Synced:  {t_str}")
+        print(f"  GitHub CLI:   {'✓ Authenticated (' + str(st['gh_username']) + ')' if st['gh_authenticated'] else ('Installed (Not logged in)' if st['gh_available'] else 'Not Installed')}\n")
+    elif action == "now":
+        print("Synchronizing agent-memory vault with remote Git repository...")
+        res = sync.sync(push=True, pull=True)
+        print(f"Sync status: {res['status']}")
+        if res.get("dedupe") and res["dedupe"].get("observations_pruned", 0) > 0:
+            print(f"Compaction: pruned {res['dedupe']['observations_pruned']} redundant observations.")
+        print("Done.")
+    elif action == "dedupe":
+        print("Deduplicating and compacting memory vault...")
+        d = vault.deduplicate_and_compact()
+        print(f"Observations: {d['observations_before']} -> {d['observations_after']} ({d['observations_pruned']} pruned)")
+        print(f"Graph items:  {d['graph_before']} -> {d['graph_after']} ({d['graph_pruned']} pruned)")
+        sync.sync(push=True, pull=False)
+        print("Done.")
+    elif action == "init":
+        if getattr(args, "create_private", False):
+            ok, msg = sync.setup_gh_repo(repo_name=getattr(args, "repo_name", "agent-memory-vault"))
+            print(f"[{'✓' if ok else '!'}] {msg}")
+        elif getattr(args, "remote_url", None):
+            ok, msg = sync.setup_git_remote(args.remote_url)
+            print(f"[{'✓' if ok else '!'}] {msg}")
+        else:
+            setup_sync_interactive()
+
 
 def cmd_uninstall(args: argparse.Namespace) -> None:
     scope = args.scope
@@ -1187,7 +1337,7 @@ def cmd_test(args: argparse.Namespace) -> None:
         tools_req = {"jsonrpc": "2.0", "id": 3, "method": "tools/list", "params": {}}
         tools_res = send_rpc(tools_req)
         tools = [t.get("name") for t in tools_res.get("result", {}).get("tools", [])]
-        expected_tools = ["memory_recall", "memory_recall_deep", "memory_record", "memory_promote"]
+        expected_tools = ["memory_recall", "memory_recall_deep", "memory_record", "memory_promote", "memory_sync"]
         for exp in expected_tools:
             if exp in tools:
                 print(f"  [✓] tool registered: {exp}")
@@ -1223,6 +1373,17 @@ def main() -> None:
     p_install.add_argument("--scope", choices=["user", "project"], default="user", help="Install to user or project config")
     p_install.add_argument("--python", help="Override Python executable path")
     p_install.add_argument("--server", help="Override mcp_server.py path")
+    p_install.add_argument("--yes", "-y", action="store_true", help="Non-interactive mode with default recommendations")
+    p_install.add_argument("--auto-gh", action="store_true", help="Auto-create private GitHub repo if gh is available")
+    p_install.add_argument("--skip-sync", action="store_true", help="Skip Git sync setup during install")
+
+    # sync
+    p_sync = subparsers.add_parser("sync", help="Manage multi-device Git sync and vault compaction")
+    p_sync.add_argument("action", nargs="?", default="status", choices=["status", "now", "dedupe", "init"],
+                        help="Action: 'status' (default), 'now' (pull & push), 'dedupe' (compact), 'init' (connect remote)")
+    p_sync.add_argument("remote_url", nargs="?", default=None, help="Remote Git repository URL (for init)")
+    p_sync.add_argument("--create-private", action="store_true", help="Auto-create private repo with gh (for init)")
+    p_sync.add_argument("--repo-name", default="agent-memory-vault", help="Custom repo name for --create-private")
 
     # uninstall
     p_uninstall = subparsers.add_parser("uninstall", help="Remove MCP server and rules for specified tools")
@@ -1246,6 +1407,8 @@ def main() -> None:
         cmd_status(args)
     elif args.command == "install":
         cmd_install(args)
+    elif args.command == "sync":
+        cmd_sync(args)
     elif args.command == "uninstall":
         cmd_uninstall(args)
     elif args.command == "test":

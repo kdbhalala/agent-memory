@@ -103,6 +103,40 @@ python integrate.py test
 
 ---
 
+## Multi-Device Git Sync & Auto-Compaction
+
+`agent-memory` completely separates **framework code** from your **memory data**:
+- **Framework Updates**: You can `git pull` or `pip install -U agent-memory` anytime without ever risking or modifying your memories.
+- **Canonical Vault (`~/.agent-memory/vault/`)**: Your memories are stored as merge-friendly, append-only JSONL files (`observations.jsonl` and `graph.jsonl`). Git handles merging across multiple laptops and desktops seamlessly with zero binary merge conflicts.
+- **Local Fast SQLite Cache (`~/.agent-memory/memory.db`)**: Automatically materialized and updated from the vault for sub-millisecond BM25 and recursive graph traversal.
+- **Automatic Background Sync**: Whenever an observation or pattern is recorded, `agent-memory` automatically commits and pushes in the background without blocking the AI assistant.
+- **Periodic Deduplication & Compaction**: Prunes noise, duplicate observations, and redundant graph edges so your vault stays compact and performant over months of usage.
+
+### 1-Command Setup (with GitHub CLI)
+During `python integrate.py install all`, the installer automatically detects `gh` CLI:
+```text
+[✓] GitHub CLI (gh) detected: Logged in as @username
+Create private GitHub repo 'agent-memory-vault' and enable automatic sync? [Y/n]: 
+```
+Pressing **Enter** creates your private repo and activates automatic cross-device sync.
+
+### Sync CLI Commands
+```bash
+# Check vault sync status & diagnostics
+agent-sync status
+
+# Trigger immediate pull & push
+agent-sync sync
+
+# Force deduplication and compaction of memory files
+agent-sync dedupe
+
+# Connect to any existing Git remote manually
+agent-sync init git@github.com:username/my-agent-memory-vault.git
+```
+
+---
+
 ## Supported Assistants Matrix
 
 Every integrated tool gains access to `memory_recall`, `memory_recall_deep`, `memory_record`, and `memory_promote`:

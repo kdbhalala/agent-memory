@@ -163,6 +163,64 @@ with tempfile.TemporaryDirectory() as tmp_dir:
     st = gl.stats()
     assert st["nodes"] >= 4 and st["edges"] >= 3
 
+# test vault, deduplication, and sync
+import vault
+import sync
+with tempfile.TemporaryDirectory() as tmp_dir:
+    t_dir = Path(tmp_dir)
+    v_dir = t_dir / "vault"
+    s_db = t_dir / "test_session.db"
+    g_db = t_dir / "test_graph.db"
+    
+    # 1. init
+    vault.init_vault(v_dir)
+    assert (v_dir / "observations.jsonl").exists()
+    assert (v_dir / "graph.jsonl").exists()
+    assert (v_dir / ".gitignore").exists()
+
+    # 2. populate sqlite with duplicate & noisy observations
+    from layers.session_layer import SessionLayer
+    sl = SessionLayer(worker="http://127.0.0.1:99999", db_path=s_db)
+    sl.record("Decision: use sqlite FTS5", title="FTS5", project="p1")
+    sl.record("Decision: use sqlite FTS5", title="FTS5", project="p1")  # duplicate
+    sl.record("no new patterns", title="None", project="p1")  # noise
+    sl.record("What was decided: use sqlite FTS5 with BM25", title="FTS5 BM25", project="p1")
+
+    # 3. populate graph
+    from layers.graph_layer import GraphLayer
+    gl = GraphLayer(db_path=g_db, project="p1")
+    gl.add_edge("App", "CONNECTS", "DB", "App connects to SQLite DB", project="p1")
+    gl.add_edge("App", "CONNECTS", "DB", "App connects to SQLite DB", project="p1")  # duplicate edge
+
+    # 4. export & simulate incoming duplicate from remote device
+    exp = vault.export_dirty_to_vault(vault_dir=v_dir, session_db=s_db, graph_db=g_db)
+    assert exp["observations"] >= 2
+    assert exp["graph"] >= 1
+
+    # simulate a remote machine syncing an edge that duplicates local one
+    with open(v_dir / "graph.jsonl", "a", encoding="utf-8") as f:
+        f.write(json.dumps({"kind": "edge", "source": "App", "relation": "CONNECTS", "target": "DB", "fact": "App connects to SQLite DB", "project": "p1"}) + "\n")
+
+    # 5. deduplicate and compact
+    d_res = vault.deduplicate_and_compact(vault_dir=v_dir, session_db=s_db, graph_db=g_db)
+    assert d_res["observations_pruned"] >= 1, f"Expected pruned observations, got {d_res}"
+    assert d_res["graph_pruned"] >= 1, f"Expected pruned graph items, got {d_res}"
+
+    # 6. test git sync offline with local bare remote
+    remote_dir = t_dir / "remote.git"
+    import subprocess
+    subprocess.run(["git", "init", "--bare", str(remote_dir)], check=True, capture_output=True)
+    
+    sync.SYNC_CONFIG_FILE = t_dir / "sync.json"
+    ok, msg = sync.setup_git_remote(str(remote_dir), vault_dir=v_dir)
+    assert ok, f"Setup git remote failed: {msg}"
+    
+    sync_res = sync.sync(vault_dir=v_dir, push=True, pull=True)
+    assert sync_res["status"] == "synced"
+    assert sync_res["pushed"] is True
+
 print("layers OK")
 print("integrate tests OK")
 print("graph tests OK")
+print("vault tests OK")
+print("sync tests OK")

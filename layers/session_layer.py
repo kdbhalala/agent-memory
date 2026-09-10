@@ -221,6 +221,16 @@ class SessionLayer(MemoryLayer):
         obs_id = cur.lastrowid
         con.commit()
         con.close()
+
+        # Export to vault and trigger background sync
+        try:
+            from vault import export_dirty_to_vault
+            from sync import schedule_auto_sync
+            export_dirty_to_vault(session_db=self.db_path)
+            schedule_auto_sync()
+        except Exception:
+            pass
+
         return {
             "id": obs_id,
             "title": tit,
