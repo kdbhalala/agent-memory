@@ -568,13 +568,6 @@ def deduplicate_and_compact(
                 f.write(json.dumps(d, ensure_ascii=False) + "\n")
         tmp_obs.replace(obs_file)
 
-        # Rebuild local session.db cleanly from compacted observations
-        if s_db.exists():
-            s_db.unlink(missing_ok=True)
-            for suff in ["-wal", "-shm"]:
-                Path(str(s_db) + suff).unlink(missing_ok=True)
-        import_from_vault(vault_dir=v_dir, session_db=s_db, graph_db=None)
-
     # 2. Compact graph
     if graph_file.exists():
         seen_nodes: Dict[Tuple[str, str], dict] = {}
@@ -635,12 +628,27 @@ def deduplicate_and_compact(
                 f.write(json.dumps(d, ensure_ascii=False) + "\n")
         tmp_graph.replace(graph_file)
 
-        # Rebuild local graph.db cleanly from compacted graph
-        if g_db.exists():
-            g_db.unlink(missing_ok=True)
+    # 3. Rebuild local SQLite databases cleanly from compacted vault
+    if s_db.resolve() == g_db.resolve():
+        if s_db.exists():
+            s_db.unlink(missing_ok=True)
             for suff in ["-wal", "-shm"]:
-                Path(str(g_db) + suff).unlink(missing_ok=True)
-        import_from_vault(vault_dir=v_dir, session_db=None, graph_db=g_db)
+                Path(str(s_db) + suff).unlink(missing_ok=True)
+        import_from_vault(vault_dir=v_dir, session_db=s_db, graph_db=g_db)
+    else:
+        if obs_file.exists():
+            if s_db.exists():
+                s_db.unlink(missing_ok=True)
+                for suff in ["-wal", "-shm"]:
+                    Path(str(s_db) + suff).unlink(missing_ok=True)
+            import_from_vault(vault_dir=v_dir, session_db=s_db, graph_db=None)
+
+        if graph_file.exists():
+            if g_db.exists():
+                g_db.unlink(missing_ok=True)
+                for suff in ["-wal", "-shm"]:
+                    Path(str(g_db) + suff).unlink(missing_ok=True)
+            import_from_vault(vault_dir=v_dir, session_db=None, graph_db=g_db)
 
     return {
         "observations_before": obs_before,

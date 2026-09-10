@@ -10,4 +10,9 @@ Expected outcome:
 - Unit & layer tests: 0 errors
 - L1 Score: 10/10 (100%), latency < 5ms
 - L2 Score: 6/6 (100%), latency < 1ms
-- MCP Handshake: 5/5 tools registered
+- MCP Handshake: 8/8 tools registered
+
+To run the comprehensive 11-tier authentic stress test benchmark:
+```bash
+python3 stress_test.py
+```

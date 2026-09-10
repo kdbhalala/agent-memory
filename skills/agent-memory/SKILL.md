@@ -14,6 +14,8 @@ Use this skill when starting non-trivial tasks, establishing project patterns, o
 2. **Record (In-Flight Curation)**:
    - Record durable decisions: `memory_record(text, title, project="agent-memory", category="architecture", supersedes="#123", relations=[{"source": "A", "relation": "USES", "target": "B"}])`
    - If overriding an older pattern, pass `supersedes="#<id>"`.
-   - If `[Notice - Potential Overlap Found]` is returned, resolve conflicts by calling `memory_record` with `supersedes`.
-3. **Sync**:
+3. **Pin Core Invariants**:
+   - Pin non-negotiable architectural rules into Core Memory: `memory_pin(key="zero_pip_deps", content="Zero external pip dependencies", category="architecture", project="agent-memory")`. Pinned rules are unconditionally prepended to every recall and session startup context.
+4. **Sync**:
    - Ensure multi-device synchronization: `memory_sync(action="sync")`
+

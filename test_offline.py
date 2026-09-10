@@ -509,7 +509,7 @@ with tempfile.TemporaryDirectory() as bitemp_tmp:
 
     # 9g. Vault export/import retains bi-temporal fields
     vault.init_vault(bt_vault)
-    exp = vault.export_dirty_to_vault(vault_dir=bt_vault, graph_db=bt_db)
+    exp = vault.export_dirty_to_vault(vault_dir=bt_vault, session_db=bt_dir / "session.db", graph_db=bt_db)
     assert exp["graph"] >= 3
 
     # Check exported lines in graph.jsonl have bi-temporal fields
@@ -521,7 +521,8 @@ with tempfile.TemporaryDirectory() as bitemp_tmp:
 
     # Import into fresh DB and verify fields are preserved
     fresh_db = bt_dir / "fresh_graph.db"
-    vault.import_from_vault(vault_dir=bt_vault, graph_db=fresh_db)
+    fresh_session_db = bt_dir / "fresh_session.db"
+    vault.import_from_vault(vault_dir=bt_vault, session_db=fresh_session_db, graph_db=fresh_db)
     con_fresh = sqlite3.connect(fresh_db)
     imported_rows = con_fresh.execute("SELECT source, relation, target, is_active, superseded_by FROM graph_edges WHERE is_active = 0").fetchall()
     assert len(imported_rows) >= 1, "Expected inactive edges in freshly imported DB"

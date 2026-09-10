@@ -23,7 +23,7 @@ where = ["."]
 include = ["layers*"]
 
 [tool.setuptools]
-py-modules = ["mcp_server", "integrate", "hooks", "recall", "promote", "sync", "vault", "eval_l1", "eval_l2", "test_offline"]
+py-modules = ["mcp_server", "integrate", "hooks", "recall", "promote", "sync", "vault", "stress_test", "eval_l1", "eval_l2", "test_offline"]
 
 [project.scripts]
 agent-memory = "mcp_server:main"

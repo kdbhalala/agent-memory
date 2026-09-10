@@ -55,7 +55,7 @@ Run the automated stdio protocol verification:
 ```bash
 python integrate.py test
 ```
-Verifies `initialize`, `ping`, and tools registration (`memory_recall`, `memory_recall_deep`, `memory_record`, `memory_promote`, `memory_sync`).
+Verifies `initialize`, `ping`, and tools registration (`memory_recall`, `memory_recall_deep`, `memory_record`, `memory_promote`, `memory_sync`, `memory_pin`, `memory_unpin`, `memory_blocks`).
 
 ---
 

@@ -33,16 +33,16 @@ All core functionality is zero-dependency and tested offline:
 
 ```bash
 # Run the complete offline test suite (layers, SQLite FTS5, graph engine, integrate)
-python test_offline.py
+python3 test_offline.py && python3 eval_l1.py && python3 eval_l2.py && python3 integrate.py test
 
-# Verify the stdio MCP server protocol handshake
-python integrate.py test
+# Run the comprehensive 11-tier authentic stress test benchmark
+python3 stress_test.py
 
 # Check integration detection across assistants
-python integrate.py status
+python3 integrate.py status
 ```
 
-**Rule**: All PRs must pass `python test_offline.py` before submission.
+**Rule**: All PRs must pass `python3 test_offline.py && python3 eval_l1.py && python3 eval_l2.py && python3 integrate.py test` before submission.
 
 ---
 

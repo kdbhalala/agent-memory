@@ -12,3 +12,8 @@ Core concepts and terminology used throughout `agent-memory`:
 - **In-Flight Knowledge Graph Synthesis**: Semantic triple extraction performed directly by the host coding assistant's active model during regular tool calling, eliminating the need for external LLM daemons, additional API keys, or background processing.
 - **Conflict Steering**: Real-time (<1ms) FTS5 collision detection executed during `memory_record` that returns advisory overlap notices directly to the assistant, prompting it to resolve conflicting rules autonomously.
 - **Supersedence**: The mechanism of retiring older conventions or bugfixes when overridden by a newer decision, marking them with `[SUPERSEDED]` and downranking them in search queries.
+- **Bi-Temporal Graph Edges**: Temporal provenance tracking (`valid_from`, `valid_until`, `is_active`, `superseded_by`) on L2 knowledge graph edges that archives historical relations without data loss when newer contradictory facts emerge.
+- **Entity Alias / Canonicalization (`graph_aliases`)**: Pure-SQL and in-memory mapping layer that resolves synonyms, acronyms, and aliases (e.g. `FCM` -> `FirebaseCloudMessaging`) in sub-microsecond time (>6M lookups/sec, ~0.16 µs) without heavy embedding models.
+- **Core Memory Blocks (`core_memory_blocks`)**: Pinned mission-critical invariants and architectural constraints that are unconditionally prepended to every recall response and session startup context in <0.3ms.
+- **Lifecycle Hooks**: Universal triggers (`session-start`, `pre-compact`, `session-end`, `pre-commit`) wired into coding CLIs (Claude Code, Antigravity, Cursor, Codex, Git) that proactively inject context, auto-promote memories before compression, and sync the vault on termination.
+

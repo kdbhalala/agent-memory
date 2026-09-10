@@ -36,16 +36,38 @@ Stores entities and concepts.
 - `project`: TEXT
 - `created_at`: TEXT DEFAULT CURRENT_TIMESTAMP
 
-### `graph_edges` Table (L2 Knowledge Graph)
-Stores semantic relations and facts connecting nodes.
+### `graph_edges` Table (L2 Bi-Temporal Knowledge Graph)
+Stores semantic relations and facts connecting nodes with bi-temporal validity tracking.
 - `id`: INTEGER PRIMARY KEY AUTOINCREMENT
 - `source`: TEXT NOT NULL (indexed)
-- `relation`: TEXT NOT NULL (e.g. USES, IMPLEMENTS, DEPENDS_ON)
+- `relation`: TEXT NOT NULL (e.g. USES, IMPLEMENTS, DEPENDS_ON, FORBIDS, REPLACES)
 - `target`: TEXT NOT NULL (indexed)
 - `fact`: TEXT NOT NULL
 - `project`: TEXT (indexed)
 - `created_at`: TEXT DEFAULT CURRENT_TIMESTAMP
+- `is_active`: INTEGER NOT NULL DEFAULT 1 (indexed; 1 for current active knowledge, 0 when superseded)
+- `valid_from`: TEXT DEFAULT CURRENT_TIMESTAMP (timestamp when relation became active)
+- `valid_until`: TEXT (timestamp when relation was invalidated or superseded)
+- `superseded_by`: TEXT (description or pointer to contradictory successor edge)
 - `UNIQUE(source, relation, target, fact, project)`
+
+### `graph_aliases` Table (Pure-SQL Canonicalization)
+Maps synonyms, acronyms, and aliases to canonical entity names.
+- `alias`: TEXT PRIMARY KEY (e.g. `"fcm"`, `"k8s"`, `"jwt"`, `"sqlite"`, `"postgres"`)
+- `canonical_name`: TEXT NOT NULL (e.g. `"FirebaseCloudMessaging"`, `"Kubernetes"`, `"JSONWebToken"`)
+- `category`: TEXT (e.g. `"concept"`, `"technology"`, `"api"`)
+- `created_at`: TEXT DEFAULT CURRENT_TIMESTAMP
+
+### `core_memory_blocks` Table (Pinned Invariants)
+Stores non-negotiable architectural rules and guidelines injected unconditionally into session startup and recall responses.
+- `id`: INTEGER PRIMARY KEY AUTOINCREMENT
+- `block_key`: TEXT UNIQUE NOT NULL (e.g. `"zero_pip_deps"`, `"lifecycle_hooks"`)
+- `content`: TEXT NOT NULL
+- `category`: TEXT DEFAULT 'system'
+- `project`: TEXT DEFAULT 'global'
+- `pinned`: INTEGER DEFAULT 1 (indexed; 1 = active and injected, 0 = unpinned)
+- `created_at`: TEXT DEFAULT CURRENT_TIMESTAMP
+- `updated_at`: TEXT DEFAULT CURRENT_TIMESTAMP
 
 ---
 
