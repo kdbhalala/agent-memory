@@ -100,7 +100,7 @@ your-project/
 
 ```mermaid
 graph TD
-    subgraph AI Coding Assistants
+    subgraph Assistants ["AI Coding Assistants"]
         CC["Claude Code"]
         CU["Cursor"]
         CX["OpenAI Codex"]
@@ -114,7 +114,7 @@ graph TD
 
     MCP["agent-memory MCP Server (stdio)<br/><code>memory_recall</code> · <code>memory_recall_deep</code> · <code>memory_record</code> · <code>memory_promote</code>"]
 
-    subgraph Native Two-Layer Storage (Zero Dependencies)
+    subgraph Storage ["Native Two-Layer Storage (Zero Dependencies)"]
         L1["L1 Working Memory (SQLite FTS5)<br/>1.82ms · BM25 Ranking · Auto-bootstrapped"]
         L2["L2 Knowledge Graph (SQLite Recursive CTEs)<br/>0.35ms · Multi-hop Graph Traversal · Triples"]
     end
