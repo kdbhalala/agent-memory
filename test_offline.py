@@ -48,41 +48,17 @@ class DeadL2(MemoryLayer):
 r = recall("q", FakeL1([]), DeadL2())
 assert r["durable"] == []
 
-# promote filter + dedupe with fake L2 (state redirected to /tmp)
+# promote filter + dedupe with fake L2 and rank-order test on isolated mock DB
 import promote
 from pathlib import Path
-promote.STATE = Path("/tmp/promote-test-state.json")
-if promote.STATE.exists():
-    promote.STATE.unlink()
-cands = promote.collect()
-print(f"collect candidates from real DB: {len(cands)}")
-fake = FakeL2()
-fresh = promote.promote(fake)
-assert len(fresh) == len(cands) and len(getattr(fake, "added", [])) == len(cands)
-assert promote.promote(fake) == [], "second run must promote nothing"
-
-# promote batch limit
-promote.STATE = Path("/tmp/promote-test-limit.json")
-if promote.STATE.exists():
-    promote.STATE.unlink()
-fake_ltd = FakeL2()
-batch = promote.promote(fake_ltd, limit=5)
-assert len(batch) == 5 and len(fake_ltd.added) == 5, f"Expected 5 promoted, got {len(batch)}"
-
-# _bodies_by_id preserves rank order
-from layers.session_layer import SessionLayer
-cm = SessionLayer()
-test_ids = ["13891", "13791"]
-h_order = cm._bodies_by_id(test_ids)
-assert [h.ref for h in h_order] == test_ids, f"Order mismatch: {[h.ref for h in h_order]} vs {test_ids}"
-rev_ids = ["13791", "13891"]
-h_rev = cm._bodies_by_id(rev_ids)
-# test record() offline fallback to SQLite on isolated mock DB
 import tempfile
 import sqlite3
-with tempfile.NamedTemporaryFile(suffix=".db") as tmp:
-    tmp_db = Path(tmp.name)
-    con = sqlite3.connect(tmp_db)
+from layers.session_layer import SessionLayer
+
+with tempfile.TemporaryDirectory() as tmp_dir:
+    t_path = Path(tmp_dir)
+    mock_db = t_path / "mock_session.db"
+    con = sqlite3.connect(mock_db)
     con.execute("""CREATE TABLE observations (
         id INTEGER PRIMARY KEY AUTOINCREMENT, memory_session_id TEXT, project TEXT,
         type TEXT, title TEXT, subtitle TEXT, facts TEXT, narrative TEXT,
@@ -90,15 +66,55 @@ with tempfile.NamedTemporaryFile(suffix=".db") as tmp:
         discovery_tokens INT, created_at TEXT, created_at_epoch INT, content_hash TEXT,
         generated_by_model TEXT, relevance_count INT, sync_rev TEXT
     )""")
+    con.execute("""CREATE TABLE session_summaries (
+        id INTEGER PRIMARY KEY AUTOINCREMENT, project TEXT,
+        learned TEXT, completed TEXT, created_at_epoch INT
+    )""")
+    # Seed sample observations for promote & rank tests
+    for idx in range(1, 11):
+        con.execute(
+            "INSERT INTO observations (id, project, type, title, facts, narrative, concepts, created_at_epoch) "
+            "VALUES (?, ?, 'decision', ?, ?, ?, 'pattern', ?)",
+            (idx, "test-proj", f"Decision {idx}", f"Facts about decision {idx} with enough characters to count as signal", f"Narrative {idx}", 1000 + idx)
+        )
+    con.commit()
     con.close()
-    import layers.session_layer
-    orig_db = layers.session_layer.DB
-    layers.session_layer.DB = tmp_db
-    mock_cm = SessionLayer(worker="http://127.0.0.1:99999")  # dead worker port forces SQLite
-    rec = mock_cm.record("Test pattern offline", title="Test Pattern", project="offline-proj")
-    assert rec["id"] == 1, f"Expected id 1, got {rec}"
-    assert "SQLite" in rec["message"]
-    layers.session_layer.DB = orig_db
+
+    orig_promote_db = promote.DB
+    orig_promote_state = promote.STATE
+    try:
+        promote.DB = mock_db
+        promote.STATE = t_path / "promote-test-state.json"
+
+        cands = promote.collect()
+        assert len(cands) == 10, f"Expected 10 candidates, got {len(cands)}"
+        fake = FakeL2()
+        fresh = promote.promote(fake)
+        assert len(fresh) == len(cands) and len(getattr(fake, "added", [])) == len(cands)
+        assert promote.promote(fake) == [], "second run must promote nothing"
+
+        # promote batch limit
+        promote.STATE = t_path / "promote-test-limit.json"
+        fake_ltd = FakeL2()
+        batch = promote.promote(fake_ltd, limit=5)
+        assert len(batch) == 5 and len(fake_ltd.added) == 5, f"Expected 5 promoted, got {len(batch)}"
+
+        # _bodies_by_id preserves rank order
+        cm = SessionLayer(worker="http://127.0.0.1:99999", db_path=mock_db)
+        test_ids = ["5", "2", "8"]
+        h_order = cm._bodies_by_id(test_ids)
+        assert [h.ref for h in h_order] == test_ids, f"Order mismatch: {[h.ref for h in h_order]} vs {test_ids}"
+        rev_ids = ["8", "2", "5"]
+        h_rev = cm._bodies_by_id(rev_ids)
+        assert [h.ref for h in h_rev] == rev_ids, f"Reverse mismatch: {[h.ref for h in h_rev]} vs {rev_ids}"
+
+        # test record() offline fallback to SQLite on isolated mock DB
+        rec = cm.record("Test pattern offline", title="Test Pattern", project="offline-proj")
+        assert rec["id"] == 11, f"Expected id 11, got {rec}"
+        assert "SQLite" in rec["message"]
+    finally:
+        promote.DB = orig_promote_db
+        promote.STATE = orig_promote_state
 
 # test integrate.py logic
 import integrate

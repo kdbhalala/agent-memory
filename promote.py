@@ -39,6 +39,7 @@ def _load_state() -> set:
 
 
 def _save_state(seen: set) -> None:
+    STATE.parent.mkdir(parents=True, exist_ok=True)
     STATE.write_text(json.dumps(sorted(seen)))
 
 
