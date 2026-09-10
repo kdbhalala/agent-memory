@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "Turnkey zero-dependency two-layer memory architecture (SQLite FTS5 + Recursive Knowledge Graph) with MCP server for Claude Code, Cursor, Codex, OpenCode, and more"
 readme = "README.md"
 requires-python = ">=3.10"
-license = { text = "MIT" }
+license = "MIT"
 authors = [{ name = "Krunal Bhalala" }]
 keywords = ["mcp", "ai-memory", "knowledge-graph", "claude-code", "cursor", "codex", "opencode", "llm", "sqlite"]
 classifiers = [
@@ -13,11 +13,17 @@ classifiers = [
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
-    "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
     "Topic :: Software Development :: Libraries :: Python Modules",
 ]
 dependencies = []
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["layers*"]
+
+[tool.setuptools]
+py-modules = ["mcp_server", "integrate", "recall", "promote", "sync", "vault", "eval_l1", "eval_l2", "test_offline"]
 
 [project.scripts]
 agent-memory = "mcp_server:main"

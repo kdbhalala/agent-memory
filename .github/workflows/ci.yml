@@ -32,6 +32,11 @@ jobs:
         run: |
           python test_offline.py
 
+      - name: Run evaluations
+        run: |
+          python eval_l1.py
+          python eval_l2.py
+
       - name: Test MCP server stdio protocol
         run: |
           python integrate.py test
@@ -39,3 +44,4 @@ jobs:
       - name: Check integrate status
         run: |
           python integrate.py status
+
