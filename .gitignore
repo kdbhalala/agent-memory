@@ -9,3 +9,8 @@ results_*.json
 *.db
 *.sqlite
 benchmarks/results/
+.codegraph/
+*.local.md
+*.local.json
+CLAUDE.local.md
+settings.local.json

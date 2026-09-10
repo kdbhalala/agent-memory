@@ -1356,6 +1356,152 @@ def cmd_test(args: argparse.Namespace) -> None:
         proc.terminate()
 
 
+def cmd_scaffold(args: argparse.Namespace) -> None:
+    """Scaffold the universal multi-assistant production project architecture."""
+    target = Path(getattr(args, "path", ".") or ".").resolve()
+    proj_name = getattr(args, "name", None) or target.name or "my-project"
+    force = getattr(args, "force", False)
+    py_path = getattr(args, "python", None) or detect_python()
+    srv_path = getattr(args, "server", None) or detect_server()
+
+    print(f"\nScaffolding Universal Multi-Assistant Structure in {target} (Project: {proj_name})...\n")
+
+    def _write_file(rel_path: str, content: str) -> None:
+        p = target / rel_path
+        if p.exists() and not force:
+            print(f"  [-] Skipped existing: {rel_path}")
+            return
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(content.strip() + "\n", encoding="utf-8")
+        print(f"  [✓] Created: {rel_path}")
+
+    # 1. Root .mcp.json (Claude Code, Cursor, OpenCode)
+    mcp_json = json.dumps({
+        "mcpServers": {
+            "agent-memory": {
+                "type": "stdio",
+                "command": py_path,
+                "args": [srv_path],
+                "env": {}
+            }
+        }
+    }, indent=2)
+    _write_file(".mcp.json", mcp_json)
+
+    # 2. Universal Executive Index: AGENTS.md & CLAUDE.md
+    brain_md = f"""# {proj_name} - AI Assistant Workspace Guide
+
+Universal executive index and rules for Claude Code, Cursor, Codex, OpenCode, Antigravity, and all major assistants.
+
+## Memory Discipline (agent-memory MCP)
+
+When working in this project:
+1. **Recall Prior Precedents**: Call `memory_recall(query, project="{proj_name}")` before making assumptions about architecture, conventions, or past fixes.
+2. **Deep Architecture Search**: Call `memory_recall_deep(query, project="{proj_name}")` when foundational or cross-domain context is needed.
+3. **Record Verified Decisions**: Call `memory_record(text, title, project="{proj_name}")` whenever establishing patterns or resolving non-trivial issues.
+
+## Project Structure & Pointers
+
+- **Conventions & Rules**: [`rules/`](rules/)
+  - Architecture: [`rules/architecture.md`](rules/architecture.md)
+  - Memory Discipline: [`rules/memory-discipline.md`](rules/memory-discipline.md)
+  - Testing & QA: [`rules/testing-qa.md`](rules/testing-qa.md)
+- **Durable Context**: [`context/`](context/)
+  - Data Model: [`context/data-model.md`](context/data-model.md)
+  - Operational Runbook: [`context/runbook.md`](context/runbook.md)
+- **Commands & Playbooks**: [`commands/`](commands/)
+"""
+    _write_file("AGENTS.md", brain_md)
+    _write_file("CLAUDE.md", brain_md)
+
+    # 3. Modular rules/
+    _write_file("rules/memory-discipline.md", f"""# Agent Memory Discipline
+
+1. Call `memory_recall` with project="{proj_name}" before starting tasks.
+2. Record verified conventions, patterns, and fixes via `memory_record`.
+3. Keep root index files concise; let `agent-memory` handle durable memories.
+""")
+
+    _write_file("rules/architecture.md", f"""# Architecture & System Design ({proj_name})
+
+Document system boundaries, component relationships, and foundational design invariants here.
+""")
+
+    _write_file("rules/testing-qa.md", f"""# Testing & QA Standards ({proj_name})
+
+Document test runners, verification checklists, and CI/CD commands here.
+""")
+
+    # 4. Durable context/
+    _write_file("context/data-model.md", f"""# Data Model & Schema Specifications ({proj_name})
+
+Document database schemas, API entities, and data structures here.
+""")
+
+    _write_file("context/runbook.md", f"""# Operational Runbook ({proj_name})
+
+Document build steps, deployment procedures, and troubleshooting workflows here.
+""")
+
+    # 5. Commands/
+    _write_file("commands/review.md", """# /review Playbook
+
+Review recent changes against architecture invariants, testing coverage, and style conventions.
+""")
+
+    _write_file("commands/test.md", """# /test Playbook
+
+Execute the primary test suite and report pass/fail status.
+""")
+
+    # 6. Assistant Adapters
+    # Claude Code
+    _write_file(".claude/settings.json", json.dumps({"permissions": {"allow": ["mcp:agent-memory:*"]}}, indent=2))
+    _write_file(".claude/rules/memory-discipline.md", f"""# Memory Discipline
+Always call `memory_recall` with project="{proj_name}" before modifying code, and `memory_record` after landing changes.
+""")
+
+    # Cursor
+    _write_file(".cursor/mcp.json", json.dumps({
+        "mcpServers": {
+            "agent-memory": {
+                "command": py_path,
+                "args": [srv_path]
+            }
+        }
+    }, indent=2))
+    _write_file(".cursor/rules/agent-memory.mdc", f"""---
+description: Proactive memory recall and recording for {proj_name}
+alwaysApply: true
+---
+
+# Memory Discipline (agent-memory MCP)
+
+1. Call `memory_recall` or `memory_recall_deep` with project="{proj_name}" before modifying code.
+2. Record new patterns or bug fixes via `memory_record`.
+3. Check [`rules/architecture.md`](../../rules/architecture.md) for architectural invariants.
+""")
+
+    # Windsurf, Cline, Aider
+    _write_file(".windsurfrules", f"""# {proj_name} Rules
+1. Call `memory_recall` with project="{proj_name}" before modifying code.
+2. Record patterns via `memory_record`. See `rules/architecture.md`.
+""")
+
+    _write_file(".clinerules", f"""# {proj_name} Rules
+1. Query `memory_recall` with project="{proj_name}" before making architectural decisions.
+2. Record learnings via `memory_record`.
+""")
+
+    _write_file(".aider.conventions.md", f"""# {proj_name} Conventions
+- Memory recall: `memory_recall(query, project="{proj_name}")`
+- Memory record: `memory_record(text, title, project="{proj_name}")`
+""")
+
+    print(f"\n[✓] Successfully scaffolded universal multi-assistant structure in {target}!")
+    print(f"Supported tools: Claude Code, Cursor, Codex, OpenCode, Antigravity, Windsurf, Aider, Cline, Roo Code.\n")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         prog="agent-integrate",
@@ -1376,6 +1522,14 @@ def main() -> None:
     p_install.add_argument("--yes", "-y", action="store_true", help="Non-interactive mode with default recommendations")
     p_install.add_argument("--auto-gh", action="store_true", help="Auto-create private GitHub repo if gh is available")
     p_install.add_argument("--skip-sync", action="store_true", help="Skip Git sync setup during install")
+
+    # scaffold
+    p_scaffold = subparsers.add_parser("scaffold", help="Scaffold production multi-assistant project structure (rules/, context/, .mcp.json)")
+    p_scaffold.add_argument("path", nargs="?", default=".", help="Target directory (default: current directory)")
+    p_scaffold.add_argument("--name", help="Project name (default: directory name)")
+    p_scaffold.add_argument("--force", action="store_true", help="Overwrite existing scaffold files")
+    p_scaffold.add_argument("--python", help="Override Python executable path")
+    p_scaffold.add_argument("--server", help="Override mcp_server.py path")
 
     # sync
     p_sync = subparsers.add_parser("sync", help="Manage multi-device Git sync and vault compaction")
@@ -1407,6 +1561,8 @@ def main() -> None:
         cmd_status(args)
     elif args.command == "install":
         cmd_install(args)
+    elif args.command == "scaffold":
+        cmd_scaffold(args)
     elif args.command == "sync":
         cmd_sync(args)
     elif args.command == "uninstall":
