@@ -3,8 +3,8 @@ class AgentMemory < Formula
 
   desc "Turnkey zero-dependency two-layer memory architecture for AI coding assistants"
   homepage "https://github.com/kdbhalala/agi-memory"
-  url "https://github.com/kdbhalala/agi-memory/archive/refs/tags/v0.1.0.tar.gz"
-  sha256 "a73797b1e99c15ffdc909ee8c1e44bb0ff2ded6e232e4be6ae19289f5b0bc0ee"
+  url "https://github.com/kdbhalala/agi-memory/archive/refs/tags/v0.1.1.tar.gz"
+  sha256 "7818fff41e03990b763144257b0312357667a5046979957d9f4dfc50f4da4365"
   license "MIT"
   head "https://github.com/kdbhalala/agi-memory.git", branch: "main"
 
