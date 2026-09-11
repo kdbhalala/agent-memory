@@ -1,8 +1,8 @@
-# Contributing to agent-memory
+# Contributing to agi-memory
 
-Thank you for your interest in contributing to `agent-memory`!
+Thank you for your interest in contributing to `agi-memory`!
 
-`agent-memory` provides a unified, zero-dependency two-layer memory architecture for AI coding assistants (Claude Code, Cursor, Windsurf, Codex, OpenCode, Antigravity, Aider, Goose, Cline, Roo Code, Crush, Pi).
+`agi-memory` provides a unified, zero-dependency four-pillar cognitive memory framework (Epistemic, Semantic, Episodic, Structural Code Graph) with a 15-tool MCP server for AI coding assistants (Claude Code, Cursor, Windsurf, Codex, OpenCode, Antigravity, Aider, Goose, Cline, Roo Code, Crush, Pi).
 
 ---
 
@@ -10,8 +10,8 @@ Thank you for your interest in contributing to `agent-memory`!
 
 1. **Clone the Repository**:
    ```bash
-   git clone https://github.com/kdbhalala/agent-memory.git
-   cd agent-memory
+   git clone https://github.com/kdbhalala/agi-memory.git
+   cd agi-memory
    ```
 
 2. **Create a Virtual Environment**:
@@ -35,7 +35,7 @@ All core functionality is zero-dependency and tested offline:
 # Run the complete offline test suite (layers, SQLite FTS5, graph engine, integrate)
 python3 tests/test_offline.py && python3 tests/eval_l1.py && python3 tests/eval_l2.py && agi-integrate test
 
-# Run the comprehensive 11-tier authentic stress test benchmark
+# Run the comprehensive 12-tier authentic stress test benchmark
 python3 tests/stress_test.py
 
 # Check integration detection across assistants
@@ -48,8 +48,8 @@ agi-integrate status
 
 ## Architecture Principles
 
-1. **Zero External Dependencies**: The core MCP server, L1 working memory, L2 knowledge graph, and `integrate.py` CLI must rely solely on the Python standard library and built-in `sqlite3`. Do not add required dependencies to `pyproject.toml`.
-2. **Speed & Efficiency**: Retrieval should remain sub-millisecond to avoid slowing down agent coding loops.
+1. **Zero External Dependencies**: The core MCP server, L1 working memory, L2 knowledge graph, L3 episodic layer, L4 structural code graph, and CLI must rely solely on the Python standard library and built-in `sqlite3`. Do not add required dependencies to `pyproject.toml`.
+2. **Speed & Efficiency**: Retrieval should remain sub-millisecond (<2ms L1, <0.5ms L2, <0.25ms L3, <0.5ms L4) to avoid slowing down agent coding loops.
 3. **Graceful Degradation**: If an optional layer or background worker is offline, the system must degrade cleanly without throwing unhandled exceptions.
 4. **Tool Independence**: Any new agent integration must work across platforms (Linux, macOS, Windows).
 5. **Byte-for-Byte Assistant Parity**: `CLAUDE.md` and `AGENTS.md` must remain 100% byte-for-byte identical at all times (`diff -u CLAUDE.md AGENTS.md` must be empty).

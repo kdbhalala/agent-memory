@@ -591,7 +591,10 @@ class GraphLayer(MemoryLayer):
 
             proj_filter_0 = ""
             proj_filter_1 = ""
-            if self.project:
+            if self.project in ("agi-memory", "agent-memory"):
+                proj_filter_0 = "AND (e0.project IN ('agi-memory', 'agent-memory') OR e0.project = 'global')"
+                proj_filter_1 = "AND (e.project IN ('agi-memory', 'agent-memory') OR e.project = 'global')"
+            elif self.project:
                 proj_filter_0 = "AND (e0.project = ? OR e0.project = 'global')"
                 proj_filter_1 = "AND (e.project = ? OR e.project = 'global')"
                 args = node_list + node_list + [self.project, self.project]

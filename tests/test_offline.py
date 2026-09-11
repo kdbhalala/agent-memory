@@ -993,6 +993,52 @@ func (s *Server) Start() {
     mcp_server.cmd_impact(["verify_token", "--project", "sample-agent-app"])
     mcp_server.cmd_index(["src/agi_memory", "--project", "sample-agent-app"])
 
+# 15. Documentation Consistency, Parity & Link Integrity Checks
+with tempfile.TemporaryDirectory() as doc_tmp:
+    import re
+    repo_root = Path(__file__).resolve().parent.parent
+
+    # 15a. CLAUDE.md and AGENTS.md byte-for-byte identity
+    claude_md = (repo_root / "CLAUDE.md").read_bytes()
+    agents_md = (repo_root / "AGENTS.md").read_bytes()
+    assert claude_md == agents_md, "CLAUDE.md and AGENTS.md must be 100% byte-for-byte identical!"
+
+    # 15b. Tool parity: all 15 MCP tools registered in mcp_server must be documented
+    registered_tools = {t["name"] for t in mcp_server.TOOLS}
+    assert len(registered_tools) == 15, f"Expected 15 tools in mcp_server, found {len(registered_tools)}"
+
+    readme_text = (repo_root / "README.md").read_text(encoding="utf-8")
+    api_contracts_text = (repo_root / "rules" / "api-contracts.md").read_text(encoding="utf-8")
+    for tool_name in registered_tools:
+        assert tool_name in readme_text, f"Tool '{tool_name}' not documented in README.md"
+        assert tool_name in api_contracts_text, f"Tool '{tool_name}' not documented in rules/api-contracts.md"
+
+    # 15c. Relative link integrity in rules/architecture.md
+    arch_md = (repo_root / "rules" / "architecture.md").read_text(encoding="utf-8")
+    rel_links = re.findall(r"\[`[^`]+`\]\(([^)]+)\)", arch_md)
+    rules_dir = repo_root / "rules"
+    for link in rel_links:
+        target_path = (rules_dir / link).resolve()
+        assert target_path.exists(), f"Broken relative link in rules/architecture.md: {link} (resolved to {target_path})"
+
+    # 15d. Project namespace alias bridging (agent-memory <-> agi-memory)
+    alias_db = Path(doc_tmp) / "alias_test.db"
+    sl_legacy = SessionLayer(db_path=alias_db, project="agent-memory")
+    rec_res = sl_legacy.record("Legacy setting: always use port 8080", title="Legacy Port Rule", project="agent-memory")
+    assert rec_res["id"] > 0
+
+    # Query using new project name "agi-memory" should find the legacy "agent-memory" observation!
+    sl_new = SessionLayer(db_path=alias_db, project="agi-memory")
+    hits = sl_new.search("port 8080")
+    assert len(hits) >= 1, "Expected search with project='agi-memory' to recall observations saved under 'agent-memory'"
+    assert "port 8080" in hits[0].text
+
+    # And vice versa: saving under "agi-memory" should be recallable when querying "agent-memory"
+    sl_new.record("New setting: TLS v1.3 only", title="TLS Rule", project="agi-memory")
+    hits_legacy = sl_legacy.search("TLS v1.3")
+    assert len(hits_legacy) >= 1, "Expected search with project='agent-memory' to recall observations saved under 'agi-memory'"
+    assert "TLS" in hits_legacy[0].text
+
 print("layers OK")
 print("integrate tests OK")
 print("graph tests OK")
@@ -1007,3 +1053,5 @@ print("modularity & event listener decoupling OK")
 print("cold-start bootstrap & observability CLI OK")
 print("episodic session timeline & recaps OK")
 print("structural code graph AST & impact analysis OK")
+print("documentation parity, tool coverage & alias bridging OK")
+

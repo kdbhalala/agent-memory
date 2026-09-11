@@ -1,6 +1,6 @@
 # Distribution: PyPI & Homebrew
 
-`agent-memory` is distributed via two official channels: **PyPI** (universal Python/uvx runtime) and **Homebrew** (native macOS/Linux package manager).
+`agi-memory` is distributed via two official channels: **PyPI** (universal Python/uvx runtime) and **Homebrew** (native macOS/Linux package manager).
 
 ---
 
@@ -23,7 +23,7 @@ In any assistant config (`.cursor/mcp.json`, `claude_desktop_config.json`, `wind
 ```json
 {
   "mcpServers": {
-    "agent-memory": {
+    "agi-memory": {
       "command": "uvx",
       "args": ["agi-memory"]
     }

@@ -1,11 +1,14 @@
 # Domain Glossary
 
-Core concepts and terminology used throughout `agent-memory`:
+Core concepts and terminology used throughout `agi-memory`:
 
-- **L1 Working Memory (`SessionLayer`)**: Local SQLite FTS5 database storing granular, timestamped observations from past coding sessions. Optimized for sub-2ms BM25 keyword and phrase retrieval.
-- **L2 Knowledge Graph (`GraphLayer`)**: Native SQLite knowledge graph storing entity nodes (`graph_nodes`) and semantic relationship triples (`graph_edges`). Queried via recursive Common Table Expressions (`WITH RECURSIVE`) in <0.5ms.
-- **Triple**: An atomic knowledge statement formatted as `(Subject, Predicate, Object, Fact)`, e.g. `(AuthService, USES, Redis, "AuthService caches tokens in Redis")`.
-- **Vault (`~/.agent-memory/vault/`)**: The Git-friendly canonical data store consisting of append-only JSONL files (`observations.jsonl`, `graph.jsonl`, `promoted.json`).
+- **L1 Epistemic Working Memory (`SessionLayer`)**: Local SQLite FTS5 database storing granular, timestamped observations from past coding sessions. Optimized for sub-2ms BM25 keyword and phrase retrieval, conflict steering, and Core Memory blocks.
+- **L2 Semantic Knowledge Graph (`GraphLayer`)**: Native SQLite knowledge graph storing entity nodes (`graph_nodes`) and semantic relationship triples (`graph_edges`). Queried via recursive Common Table Expressions (`WITH RECURSIVE`) in <0.5ms.
+- **L3 Episodic Session Memory (`EpisodicLayer`)**: SQLite session lifecycle and event engine answering *"What happened during previous agent sessions?"*. Tracks session start/end, duration, touched files, commit deltas, and generates cross-session startup recaps (<0.25ms).
+- **L4 Structural Code Graph (`CodeLayer`)**: Python stdlib AST + streaming regex graph engine answering *"How is this codebase structurally connected?"*. Discovers symbols, inbound callers (`code_callers`), outbound dependencies (`code_dependencies`), and evaluates blast-radius impact analysis (`code_impact`) in <0.5ms.
+- **Blast-Radius Impact Analysis**: Graph traversal analyzing upstream callers and affected files when a target symbol or module is modified or deleted, categorizing risk as LOW, MEDIUM, or HIGH.
+- **Triple**: An atomic knowledge statement formatted as `(Subject, Predicate, Object, Fact)`, e.g. `(AuthService, USES, SecureStorage, "AuthService persists tokens in SecureStorage")`.
+- **Vault (`~/.agi-memory/vault/`)**: The Git-friendly canonical data store consisting of append-only JSONL files (`observations.jsonl`, `graph.jsonl`, `promoted.json`) with automatic backward compatibility for `~/.agent-memory/vault/`.
 - **Compaction / Deduplication**: Process of removing redundant observations, identical hashes, noise (`NO_SIGNAL`), and duplicate graph edges to prevent database bloat over time.
 - **Debounced Sync**: Background synchronization mechanism that batches rapid writes (e.g. within 3 seconds) into a single atomic Git commit and push, avoiding commit spam.
 - **Materialization**: Process of generating or updating the local SQLite cache from the canonical JSONL files upon pulling from remote.
@@ -13,8 +16,8 @@ Core concepts and terminology used throughout `agent-memory`:
 - **Conflict Steering**: Real-time (<1ms) FTS5 collision detection executed during `memory_record` that returns advisory overlap notices directly to the assistant, prompting it to resolve conflicting rules autonomously.
 - **Supersedence**: The mechanism of retiring older conventions or bugfixes when overridden by a newer decision, marking them with `[SUPERSEDED]` and downranking them in search queries.
 - **Bi-Temporal Graph Edges**: Temporal provenance tracking (`valid_from`, `valid_until`, `is_active`, `superseded_by`) on L2 knowledge graph edges that archives historical relations without data loss when newer contradictory facts emerge.
-- **Entity Alias / Canonicalization (`graph_aliases`)**: Pure-SQL and in-memory mapping layer that resolves synonyms, acronyms, and aliases (e.g. `FCM` -> `FirebaseCloudMessaging`) in sub-microsecond time (>6M lookups/sec, ~0.16 µs) without heavy embedding models.
+- **Entity Alias / Canonicalization (`graph_aliases`)**: Pure-SQL and in-memory mapping layer that resolves synonyms, acronyms, and aliases (e.g. `FCM` -> `FirebaseCloudMessaging`) in sub-microsecond time (>4M lookups/sec, ~0.24 µs) without heavy embedding models.
 - **Core Memory Blocks (`core_memory_blocks`)**: Pinned mission-critical invariants and architectural constraints that are unconditionally prepended to every recall response and session startup context in <0.3ms.
-- **Lifecycle Hooks**: Universal triggers (`session-start`, `pre-compact`, `session-end`, `pre-commit`) wired into coding CLIs (Claude Code, Antigravity, Cursor, Codex, Git) that proactively inject context, auto-promote memories before compression, and sync the vault on termination.
-- **Cold-Start Bootstrapping (`bootstrap.py`)**: Zero-touch automated seeder that parses the repository `README.md` and high-signal Git commit history (`git log`) to initialize L1 working memory on Day 1, eliminating empty-vault churn.
-- **Developer Observability & Curation CLI**: Human-in-the-loop terminal commands (`agent-memory log`, `agent-memory inspect`, `agent-memory delete`, `agent-memory bootstrap`, `agent-memory recall`, `agent-memory pin`, `agent-memory unpin`, `agent-memory blocks`) allowing developers to view, inspect, and curate memory state without needing raw SQL.
+- **Lifecycle Hooks**: Universal triggers (`session-start`, `pre-compact`, `session-end`, `pre-commit`, `post-commit`) wired into coding CLIs (Claude Code, Antigravity, Cursor, Codex, Git) that proactively inject context, auto-promote memories before compression, track episodic commits, and sync the vault on termination.
+- **Cold-Start Bootstrapping (`bootstrap.py`)**: Zero-touch automated seeder that parses repository `README.md`, recent Git commits (`git log`), and source code symbols to initialize L1 working memory and L4 code graph on Day 1.
+- **Developer Observability & Curation CLI**: Human-in-the-loop terminal commands (`agi-memory log`, `inspect`, `delete`, `timeline`, `structure`, `callers`, `dependencies`, `impact`, `index`, `bootstrap`, `recall`, `pin`, `unpin`, `blocks`) allowing developers to view, inspect, and curate memory state without needing raw SQL.

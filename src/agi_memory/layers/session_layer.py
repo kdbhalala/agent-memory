@@ -127,7 +127,9 @@ class SessionLayer(MemoryLayer):
         sql = ("SELECT id, project, title, facts, narrative, type FROM observations "
                f"WHERE id IN ({ph})")
         args: list = [int(i) for i in ids]
-        if self.project:
+        if self.project in ("agi-memory", "agent-memory"):
+            sql += " AND (project = 'agi-memory' OR project = 'agent-memory')"
+        elif self.project:
             sql += " AND project = ?"
             args.append(self.project)
         rows = con.execute(sql, args).fetchall()
@@ -154,7 +156,9 @@ class SessionLayer(MemoryLayer):
                  JOIN observations ON observations.id = observations_fts.rowid
                  WHERE observations_fts MATCH ?"""
         args: list = [" OR ".join(tokens)]
-        if self.project:
+        if self.project in ("agi-memory", "agent-memory"):
+            sql += " AND (project = 'agi-memory' OR project = 'agent-memory')"
+        elif self.project:
             sql += " AND project = ?"
             args.append(self.project)
         sql += " ORDER BY (CASE WHEN observations.type = 'superseded' THEN 1 ELSE 0 END) ASC, rank LIMIT ?"
@@ -169,7 +173,9 @@ class SessionLayer(MemoryLayer):
                              JOIN observations ON observations.id = observations_fts.rowid
                              WHERE observations_fts MATCH ?"""
                 args_pfx = [" OR ".join(prefix_tokens)]
-                if self.project:
+                if self.project in ("agi-memory", "agent-memory"):
+                    sql_pfx += " AND (project = 'agi-memory' OR project = 'agent-memory')"
+                elif self.project:
                     sql_pfx += " AND project = ?"
                     args_pfx.append(self.project)
                 sql_pfx += " ORDER BY (CASE WHEN observations.type = 'superseded' THEN 1 ELSE 0 END) ASC, rank LIMIT ?"

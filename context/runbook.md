@@ -6,34 +6,37 @@
 When switching from Laptop to Desktop:
 ```bash
 # Pull remote memories and reconcile local SQLite cache
-agent-sync sync
+agi-sync sync
+# or: python3 -m agi_memory.sync sync
 ```
 
 ### 2. Manual Compaction & Deduplication
 If large volumes of memories have been recorded:
 ```bash
 # Deduplicate observations and graph edges, then re-index SQLite
-agent-sync dedupe
+agi-sync dedupe
+# or: python3 -m agi_memory.sync dedupe
 ```
 
 ### 3. Promoting Working Memory to Knowledge Graph
 Curate high-signal items from L1 observations into L2 triples:
 ```bash
 # Dry run to inspect candidates
-python3 promote.py --dry-run --project agent-memory
+python3 -m agi_memory.promote --dry-run --project agi-memory
 
 # Ingest top 20 durable learnings
-python3 promote.py --project agent-memory --limit 20
+python3 -m agi_memory.promote --project agi-memory --limit 20
 ```
 
 ### 4. Wire or Refresh Coding Assistants
 Inspect or install MCP connections across tools:
 ```bash
 # Check all detected tools
-python3 integrate.py status
+agi-integrate status
+# or: python3 -m agi_memory.integrate status
 
 # Reconfigure all installed tools
-python3 integrate.py install all
+agi-integrate install all
 ```
 
 ### 5. Resolving Conflicting Decisions
@@ -41,74 +44,100 @@ When an AI assistant receives a `[Notice - Potential Overlap Found]` message dur
 - If the new pattern overrides the older one, the assistant immediately re-invokes `memory_record` specifying `supersedes="#<id>"`.
 - You can also manually supersede an observation from the CLI:
 ```bash
-python3 -c "from layers.session_layer import SessionLayer; SessionLayer(project='my-app').record(text='New decision', supersedes='#1234')"
+python3 -c "from agi_memory.layers.session_layer import SessionLayer; SessionLayer(project='my-app').record(text='New decision', supersedes='#1234')"
 ```
 
 ### 6. Querying Superseded vs Active Rules
 By default, active rules are ranked ahead of superseded rules:
 ```bash
 # Active search
-python3 recall.py "storage" --project agent-memory
+agi-recall "storage" --project agi-memory
+# or: python3 -m agi_memory.recall "storage" --project agi-memory
 
 # Deep search including L2 knowledge graph
-python3 recall.py "storage" --project agent-memory --deep
+agi-recall "storage" --project agi-memory --deep
 ```
 
 ### 7. Running Production Stress Tests & Benchmarks
 To evaluate system performance, latency distributions, and throughput:
 ```bash
-# Execute the authentic 11-tier benchmark suite
-python3 stress_test.py
+# Execute the authentic 12-tier benchmark suite
+python3 tests/stress_test.py
 ```
 
 ### 8. Managing Automated Lifecycle Hooks
-To wire or refresh lifecycle hooks (`session-start`, `pre-compact`, `session-end`, `pre-commit`):
+To wire or refresh lifecycle hooks (`session-start`, `pre-compact`, `session-end`, `pre-commit`, `post-commit`):
 ```bash
 # Install hooks for all detected tools
-agent-integrate hooks all
+agi-integrate hooks all
 
 # Target specific tool (e.g. Claude Code or Antigravity)
-agent-integrate hooks claude agy git
+agi-integrate hooks claude agy git
 
 # Target project scope
-agent-integrate hooks all --scope project
+agi-integrate hooks all --scope project
 ```
 
 ### 9. Core Memory Pinning & Invariants
 Pin critical rules so they are unconditionally injected on session startup and recall:
 ```bash
 # Pin via Python CLI
-python3 -c "from layers.session_layer import SessionLayer; SessionLayer(project='agent-memory').pin_block('zero_pip_deps', 'Zero external pip dependencies: strictly Python stdlib and sqlite3', category='architecture', project='agent-memory')"
+python3 -c "from agi_memory.layers.session_layer import SessionLayer; SessionLayer(project='agi-memory').pin_block('zero_pip_deps', 'Zero external pip dependencies: strictly Python stdlib and sqlite3', category='architecture', project='agi-memory')"
 
 # Or via MCP tools: memory_pin / memory_unpin / memory_blocks
 ```
 
 ### 10. Cold-Start Seeding on New Repositories
-When connecting agent-memory to a newly attached project or workspace:
+When connecting agi-memory to a newly attached project or workspace:
 ```bash
-# Seed initial architecture and git commit rationale
-agent-memory bootstrap --repo .
+# Seed initial architecture, git commit rationale, and structural code graph
+agi-memory bootstrap --repo .
 
-# Or via agent-integrate
-agent-integrate bootstrap /path/to/project --max-commits 25
+# Or via agi-integrate
+agi-integrate bootstrap /path/to/project --max-commits 25
 ```
 
 ### 11. Developer Observability & Memory Curation
 Audit and curate stored memories from the command line:
 ```bash
 # View recent memories in a table
-agent-memory log -n 20 --project agent-memory
+agi-memory log -n 20 --project agi-memory
 
 # Inspect observation details, facts, narrative, and concepts
-agent-memory inspect 101
+agi-memory inspect 101
 
 # Delete or supersede an observation
-agent-memory delete 101
-agent-memory delete 101 --hard
+agi-memory delete 101
+agi-memory delete 101 --hard
 
 # Manage pinned core invariants
-agent-memory pin "zero_pip_deps" "Zero external pip dependencies" --category architecture
-agent-memory blocks
-agent-memory unpin "zero_pip_deps"
+agi-memory pin "zero_pip_deps" "Zero external pip dependencies" --category architecture
+agi-memory blocks
+agi-memory unpin "zero_pip_deps"
 ```
 
+### 12. Structural Code Graph & Impact Analysis
+Inspect symbol structure, callers, and blast radius directly:
+```bash
+# Outline symbols in file or directory
+agi-memory structure src/
+
+# Find inbound callers of a function or class
+agi-memory callers SessionLayer
+
+# Find outbound dependencies of a symbol
+agi-memory dependencies recall
+
+# Analyze blast-radius impact before refactoring
+agi-memory impact SessionLayer
+
+# Incrementally index directory into code graph
+agi-memory index src/
+```
+
+### 13. Episodic Session History & Timeline
+Inspect what coding assistants accomplished in recent sessions:
+```bash
+# View recent session timeline and summaries
+agi-memory timeline -n 10 --project agi-memory
+```

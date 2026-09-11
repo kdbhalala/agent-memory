@@ -129,26 +129,23 @@ python integrate.py scaffold .
 If you install or update coding tools after initial setup, manage hooks directly:
 ```bash
 # Install hooks to all detected tools
-agent-memory integrate hooks all
-# Or with agent-integrate
-agent-integrate hooks claude agy git
+agi-integrate hooks all
 
-# Target specific tool
-agent-integrate hooks agy
-agent-integrate hooks claude
+# Target specific tools
+agi-integrate hooks claude agy git
 
 # Project-level scope
-agent-integrate hooks all --scope project
+agi-integrate hooks all --scope project
 
 # Uninstall hooks
-agent-integrate hooks all --uninstall
+agi-integrate hooks all --uninstall
 ```
 
 ---
 
 ## Manual Configuration by Tool
 
-If you prefer manual configuration or need to configure a custom environment, copy and paste the snippets below. Replace `<PYTHON>` with your virtual environment's Python path (e.g. `/path/to/agent-memory/.venv/bin/python`) and `<SERVER>` with `/path/to/agent-memory/mcp_server.py`.
+If you prefer manual configuration or need to configure a custom environment, copy and paste the snippets below. Replace `<PYTHON>` with your Python path (e.g. `/opt/homebrew/bin/python3`) and `<SERVER>` with `/path/to/agi-memory/src/agi_memory/mcp_server.py` (or simply `"command": "agi-memory"` if installed via Homebrew or `uvx agi-memory`).
 
 ---
 

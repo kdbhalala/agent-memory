@@ -7,24 +7,24 @@
    - Never add third-party dependencies (`chromadb`, `networkx`, `requests`, `fastapi`) to runtime `dependencies` in `pyproject.toml`.
 
 2. **Strict Layer Separation & Event-Driven Decoupling**:
-   - **Configuration SSoT** ([`config.py`](../config.py)): Centralized path resolution and environment variable defaults.
-   - **L1 Epistemic Working Memory** ([`layers/session_layer.py`](../layers/session_layer.py)): Fast SQLite FTS5 with BM25 ranking (<2ms), decoupled via record event listeners.
-   - **L2 Semantic Knowledge Graph** ([`layers/graph_layer.py`](../layers/graph_layer.py)): SQLite recursive Common Table Expressions (`WITH RECURSIVE`) for multi-hop graph traversal (<0.5ms), decoupled via edge event listeners.
-   - **L3 Episodic Session History** ([`layers/episodic_layer.py`](../layers/episodic_layer.py)): Session lifecycles, event logs, commit tracking, and cross-session startup recaps (<0.25ms).
-   - **L4 Structural Code Graph** ([`layers/code_layer.py`](../layers/code_layer.py)): Python stdlib AST + streaming regex graph parser, callers, dependencies, and blast-radius impact analysis (<0.5ms).
-   - **Vault Storage & Compaction** ([`vault.py`](../vault.py)): Canonical append-only JSONL files in `~/.agent-memory/vault/`.
-   - **Git Sync Engine** ([`sync.py`](../sync.py)): Automatic background push/pull to private GitHub repository.
-   - **Cold-Start Seeder** ([`bootstrap.py`](../bootstrap.py)): Zero-touch memory bootstrapping from Git history, `README.md`, and code symbols.
-   - **Developer Observability & MCP Server** ([`mcp_server.py`](../mcp_server.py)): Dispatches 15 native MCP tools and CLI curation commands (`log`, `inspect`, `delete`, `pin`, `unpin`, `blocks`, `timeline`, `structure`, `callers`, `dependencies`, `impact`, `index`, `bootstrap`).
+   - **Configuration SSoT** ([`config.py`](../src/agi_memory/config.py)): Centralized path resolution and environment variable defaults.
+   - **L1 Epistemic Working Memory** ([`layers/session_layer.py`](../src/agi_memory/layers/session_layer.py)): Fast SQLite FTS5 with BM25 ranking (<2ms), decoupled via record event listeners.
+   - **L2 Semantic Knowledge Graph** ([`layers/graph_layer.py`](../src/agi_memory/layers/graph_layer.py)): SQLite recursive Common Table Expressions (`WITH RECURSIVE`) for multi-hop graph traversal (<0.5ms), decoupled via edge event listeners.
+   - **L3 Episodic Session History** ([`layers/episodic_layer.py`](../src/agi_memory/layers/episodic_layer.py)): Session lifecycles, event logs, commit tracking, and cross-session startup recaps (<0.25ms).
+   - **L4 Structural Code Graph** ([`layers/code_layer.py`](../src/agi_memory/layers/code_layer.py)): Python stdlib AST + streaming regex graph parser, callers, dependencies, and blast-radius impact analysis (<0.5ms).
+   - **Vault Storage & Compaction** ([`vault.py`](../src/agi_memory/vault.py)): Canonical append-only JSONL files in `~/.agi-memory/vault/` (with `~/.agent-memory/vault/` automatic legacy fallback).
+   - **Git Sync Engine** ([`sync.py`](../src/agi_memory/sync.py)): Automatic background push/pull to private GitHub repository.
+   - **Cold-Start Seeder** ([`bootstrap.py`](../src/agi_memory/bootstrap.py)): Zero-touch memory bootstrapping from Git history, `README.md`, and code symbols.
+   - **Developer Observability & MCP Server** ([`mcp_server.py`](../src/agi_memory/mcp_server.py)): Dispatches 15 native MCP tools and CLI curation commands (`log`, `inspect`, `delete`, `pin`, `unpin`, `blocks`, `timeline`, `structure`, `callers`, `dependencies`, `impact`, `index`, `bootstrap`).
 
 3. **Code vs Data Decoupling**:
    - The code repository must never store runtime databases (`*.db`, `*.sqlite`), user state (`promoted.json`), or secrets.
-   - User memory data lives in `~/.agent-memory/` and `~/.agent-memory/vault/`.
+   - User memory data lives in `~/.agi-memory/` and `~/.agi-memory/vault/` (`~/.agent-memory/` supported as automatic backward-compatible fallback).
    - Framework updates (`git pull` / `pip install -U`) must never touch or alter existing memories.
 
 4. **Naming Standard**:
    - Do not name any internal files or modules after third-party packages.
-   - Always use `SessionLayer` and `GraphLayer`.
+   - Always use `SessionLayer`, `GraphLayer`, `EpisodicLayer`, and `CodeLayer`.
 
 5. **Host-Native In-Flight LLM Synthesis**:
    - Never require external LLM daemons, local weight downloads, or separate API keys.
@@ -49,9 +49,8 @@
      - **In-Flight Conflict Detection**: <15ms across 14,000 rows.
      - **Lifecycle Hook Overhead**: <10ms for `session-start` prompt injection.
      - **Vault Compaction Throughput**: >4,000 records / second.
-     - **Zero Background Daemons**: 0 MB idle background RAM. Run `python3 stress_test.py` to reproduce locally.
+     - **Zero Background Daemons**: 0 MB idle background RAM. Run `python3 tests/stress_test.py` to reproduce locally.
 
 9. **Zero-Touch Cold-Start Seeding**:
    - Newly attached repositories and workspaces must self-bootstrap initial working memories from Git history (`git log`) and `README.md` via `bootstrap.py` without external model calls.
    - Eliminates Day-1 empty vault churn while remaining strictly idempotent.
-
