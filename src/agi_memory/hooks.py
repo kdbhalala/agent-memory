@@ -291,7 +291,7 @@ exec "{py_path}" "{repo_dir / 'hooks.py'}" post-commit "$@"
 def install_claude_hooks(scope: str = "user", py_path: str = None) -> Tuple[bool, str]:
     """Install SessionStart, PreCompact, and SessionEnd hooks for Claude Code."""
     py = py_path or detect_python()
-    hooks_py = REPO_DIR / "hooks.py"
+    hooks_py = Path(__file__).resolve()
     settings_path = Path.home() / ".claude" / "settings.json" if scope == "user" else Path.cwd() / ".claude" / "settings.json"
 
     data: Dict[str, Any] = {}
@@ -307,12 +307,22 @@ def install_claude_hooks(scope: str = "user", py_path: str = None) -> Tuple[bool
     cmd_compact = f'"{py}" "{hooks_py}" pre-compact'
     cmd_end = f'"{py}" "{hooks_py}" session-end'
 
+    def _is_memory_hook(entry: Dict[str, Any]) -> bool:
+        return any(
+            "hooks.py" in h.get("command", "")
+            or "agent-memory" in h.get("command", "")
+            or "agi-memory" in h.get("command", "")
+            or "agi-hooks" in h.get("command", "")
+            for h in entry.get("hooks", [])
+        )
+
+    # Purge any previous or stale memory hooks to eliminate duplicates or broken paths
+    for ev in ("SessionStart", "PreCompact", "SessionEnd"):
+        if ev in hooks:
+            hooks[ev] = [e for e in hooks[ev] if not _is_memory_hook(e)]
+
     def _ensure_hook(event: str, cmd: str, matcher: Optional[str] = None):
         event_list = hooks.setdefault(event, [])
-        for entry in event_list:
-            for h in entry.get("hooks", []):
-                if cmd in h.get("command", ""):
-                    return
         new_entry: Dict[str, Any] = {
             "hooks": [
                 {
