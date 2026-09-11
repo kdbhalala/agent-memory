@@ -29,11 +29,11 @@ jobs:
 
       - name: Run verification test suites
         run: |
-          python test_offline.py
-          python eval_l1.py
-          python eval_l2.py
-          python integrate.py test
-          python stress_test.py
+          python tests/test_offline.py
+          python tests/eval_l1.py
+          python tests/eval_l2.py
+          python -m agi_memory.integrate test
+          python tests/stress_test.py
 
   build:
     name: Build Distribution Packages

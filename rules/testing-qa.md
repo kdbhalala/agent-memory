@@ -8,25 +8,25 @@ Before committing or pushing any code changes, all 4 test suites must pass:
 
 1. **Unit & Offline Integration Tests**:
    ```bash
-   python3 test_offline.py
+   python3 tests/test_offline.py
    ```
    Verifies layers, base classes, SQLite schema bootstrap, ranking preservation, vault export/import, deduplication/compaction, local Git sync, cold-start bootstrap, observation inspection, soft/hard deletion, and developer observability CLI.
 
 2. **L1 Retrieval Evaluation**:
    ```bash
-   python3 eval_l1.py
+   python3 tests/eval_l1.py
    ```
    Evaluates L1 Working Memory accuracy (10/10 target) and query latency (<5ms).
 
 3. **L2 Knowledge Graph Evaluation**:
    ```bash
-   python3 eval_l2.py
+   python3 tests/eval_l2.py
    ```
    Evaluates L2 multi-hop graph traversal accuracy (6/6 target) and latency (<1ms).
 
 4. **MCP Handshake & Tool Protocol**:
    ```bash
-   python3 integrate.py test
+   agi-integrate test
    ```
    Verifies JSON-RPC 2.0 stdio communication, `initialize`, `ping`, and registration of all 9 tools:
    - `memory_recall`
@@ -41,7 +41,7 @@ Before committing or pushing any code changes, all 4 test suites must pass:
 
 5. **Comprehensive 11-Tier Production Stress Test**:
    ```bash
-   python3 stress_test.py
+   python3 tests/stress_test.py
    ```
    Evaluates full production performance against real multi-thousand observation datasets:
    - L1 Working Memory latency (<8ms p50, <16ms p95 on 14k observations)

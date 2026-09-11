@@ -181,15 +181,19 @@ def hook_session_end(project: Optional[str] = None) -> None:
 def hook_pre_commit() -> None:
     """Git pre-commit: Verify test suite and offline invariants."""
     sys.path.insert(0, str(REPO_DIR))
-    val_script = REPO_DIR / "hooks" / "validate-offline.sh"
+    val_script = Path.cwd() / "hooks" / "validate-offline.sh"
+    if not val_script.exists():
+        val_script = REPO_DIR.parent.parent / "hooks" / "validate-offline.sh"
     if val_script.exists() and os.access(val_script, os.X_OK):
         ret = subprocess.call([str(val_script)])
         if ret != 0:
             sys.exit(ret)
         return
 
-    # Fallback to test_offline.py
-    test_script = REPO_DIR / "test_offline.py"
+    # Fallback to tests/test_offline.py
+    test_script = Path.cwd() / "tests" / "test_offline.py"
+    if not test_script.exists():
+        test_script = REPO_DIR.parent.parent / "tests" / "test_offline.py"
     if test_script.exists():
         py = detect_python()
         ret = subprocess.call([py, str(test_script)])

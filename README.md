@@ -4,7 +4,7 @@
 [![PyPI](https://img.shields.io/pypi/v/agi-memory.svg)](https://pypi.org/project/agi-memory/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Dependencies](https://img.shields.io/badge/dependencies-0%20(stdlib)-brightgreen.svg)](pyproject.toml)
-[![Latency](https://img.shields.io/badge/L2%20graph%20latency-0.35ms-blue.svg)](eval_l2.py)
+[![Latency](https://img.shields.io/badge/L2%20graph%20latency-0.35ms-blue.svg)](tests/eval_l2.py)
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue.svg)](pyproject.toml)
 
 **Zero-dependency, high-performance two-layer memory architecture (SQLite FTS5 + Native Recursive Knowledge Graph) for AI coding assistants.**
@@ -42,7 +42,7 @@ The table below compares `agent-memory` directly against mainstream AI memory so
 | **Supported Coding Tools** | **12 Assistants Turnkey** | Python SDK only | Python/TS SDK only | Python SDK only | Python/TS framework only | Claude Code only |
 | **Offline / Air-Gapped** | **100% Offline & Local** | Partial (requires local weights) | No (cloud required) | No (LLM extraction required) | Partial | Yes (local daemon) |
 
-*Benchmarks measured on Apple Silicon macOS, 100 runs per tier. Reproduce locally with `python eval_l1.py` and `python eval_l2.py`.*
+*Benchmarks measured on Apple Silicon macOS, 100 runs per tier. Reproduce locally with `python tests/eval_l1.py` and `python tests/eval_l2.py`.*
 
 ### Real-World Production Scale Benchmark (13,988 Observations, 21 MB Vault)
 
@@ -396,19 +396,19 @@ All tests run completely offline with zero API keys or external services:
 
 ```bash
 # Run unit & layer tests (all 12 offline test suites)
-python3 test_offline.py
+python3 tests/test_offline.py
 
 # Evaluate L1 working memory retrieval accuracy (10/10, <2ms)
-python3 eval_l1.py
+python3 tests/eval_l1.py
 
 # Evaluate L2 knowledge graph multi-hop traversal (6/6, <0.5ms)
-python3 eval_l2.py
+python3 tests/eval_l2.py
 
 # Verify stdio MCP server protocol handshake across all 9 tools
-python3 integrate.py test
+agi-integrate test
 
 # Run comprehensive 11-tier authentic production stress test
-python3 stress_test.py
+python3 tests/stress_test.py
 ```
 
 ---

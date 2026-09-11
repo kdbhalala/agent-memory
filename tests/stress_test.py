@@ -30,16 +30,17 @@ import time
 from contextlib import redirect_stdout
 from pathlib import Path
 
-REPO_DIR = Path(__file__).resolve().parent
-sys.path.insert(0, str(REPO_DIR))
+_SRC = Path(__file__).resolve().parent.parent / "src"
+if str(_SRC) not in sys.path:
+    sys.path.insert(0, str(_SRC))
 
-from layers.session_layer import SessionLayer
-from layers.graph_layer import GraphLayer
-import config
-from recall import recall
-import promote
-import vault
-import hooks
+from agi_memory.layers.session_layer import SessionLayer
+from agi_memory.layers.graph_layer import GraphLayer
+from agi_memory import config
+from agi_memory.recall import recall
+from agi_memory import promote
+from agi_memory import vault
+from agi_memory import hooks
 
 DEFAULT_DB = config.get_default_db()
 DEFAULT_VAULT = config.get_vault_dir()

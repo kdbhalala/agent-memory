@@ -1,7 +1,14 @@
 """Offline checks: no LLM, no network (except localhost worker for L1 live test)."""
 import os
-from layers.base import Hit, MemoryLayer
-from recall import recall
+import sys
+from pathlib import Path
+
+_SRC = Path(__file__).resolve().parent.parent / "src"
+if str(_SRC) not in sys.path:
+    sys.path.insert(0, str(_SRC))
+
+from agi_memory.layers.base import Hit, MemoryLayer
+from agi_memory.recall import recall
 
 
 class FakeL1(MemoryLayer):
@@ -50,11 +57,11 @@ r = recall("q", FakeL1([]), DeadL2())
 assert r["durable"] == []
 
 # promote filter + dedupe with fake L2 and rank-order test on isolated mock DB
-import promote
+from agi_memory import promote
 from pathlib import Path
 import tempfile
 import sqlite3
-from layers.session_layer import SessionLayer
+from agi_memory.layers.session_layer import SessionLayer
 
 with tempfile.TemporaryDirectory() as tmp_dir:
     t_path = Path(tmp_dir)
@@ -118,7 +125,7 @@ with tempfile.TemporaryDirectory() as tmp_dir:
         promote.STATE = orig_promote_state
 
 # test integrate.py logic
-import integrate
+from agi_memory import integrate
 import tempfile
 import json
 
@@ -159,7 +166,7 @@ for tool in integrate.INTEGRATIONS:
     assert "agent-memory" in cfg_snip
 
 # test native GraphLayer
-from layers.graph_layer import GraphLayer
+from agi_memory.layers.graph_layer import GraphLayer
 with tempfile.TemporaryDirectory() as tmp_dir:
     g_db = Path(tmp_dir) / "graph_test.db"
     gl = GraphLayer(db_path=g_db)
@@ -181,8 +188,8 @@ with tempfile.TemporaryDirectory() as tmp_dir:
     assert st["nodes"] >= 4 and st["edges"] >= 3
 
 # test vault, deduplication, and sync
-import vault
-import sync
+from agi_memory import vault
+from agi_memory import sync
 with tempfile.TemporaryDirectory() as tmp_dir:
     t_dir = Path(tmp_dir)
     v_dir = t_dir / "vault"
@@ -196,7 +203,7 @@ with tempfile.TemporaryDirectory() as tmp_dir:
     assert (v_dir / ".gitignore").exists()
 
     # 2. populate sqlite with duplicate & noisy observations
-    from layers.session_layer import SessionLayer
+    from agi_memory.layers.session_layer import SessionLayer
     sl = SessionLayer(worker="http://127.0.0.1:99999", db_path=s_db)
     sl.record("Decision: use sqlite FTS5", title="FTS5", project="p1")
     sl.record("Decision: use sqlite FTS5", title="FTS5", project="p1")  # duplicate
@@ -204,7 +211,7 @@ with tempfile.TemporaryDirectory() as tmp_dir:
     sl.record("What was decided: use sqlite FTS5 with BM25", title="FTS5 BM25", project="p1")
 
     # 3. populate graph
-    from layers.graph_layer import GraphLayer
+    from agi_memory.layers.graph_layer import GraphLayer
     gl = GraphLayer(db_path=g_db, project="p1")
     gl.add_edge("App", "CONNECTS", "DB", "App connects to SQLite DB", project="p1")
     gl.add_edge("App", "CONNECTS", "DB", "App connects to SQLite DB", project="p1")  # duplicate edge
@@ -243,9 +250,9 @@ with tempfile.TemporaryDirectory() as inflight_tmp:
     orig_env_db = os.environ.get("AGENT_MEMORY_DB")
     os.environ["AGENT_MEMORY_DB"] = str(if_db)
     try:
-        import mcp_server
-        from layers.session_layer import SessionLayer
-        from layers.graph_layer import GraphLayer
+        from agi_memory import mcp_server
+        from agi_memory.layers.session_layer import SessionLayer
+        from agi_memory.layers.graph_layer import GraphLayer
 
         sl_if = SessionLayer(worker="http://127.0.0.1:99999", db_path=if_db, project="inflight-proj")
 
@@ -319,11 +326,11 @@ with tempfile.TemporaryDirectory() as core_tmp:
     os.environ["AGENT_MEMORY_DB"] = str(c_db)
     os.environ["AGENT_MEMORY_STATE"] = str(c_state)
     try:
-        import mcp_server
-        from layers.session_layer import SessionLayer
-        from layers.graph_layer import GraphLayer
-        import recall
-        import promote
+        from agi_memory import mcp_server
+        from agi_memory.layers.session_layer import SessionLayer
+        from agi_memory.layers.graph_layer import GraphLayer
+        from agi_memory import recall
+        from agi_memory import promote
 
         sl_core = SessionLayer(worker="http://127.0.0.1:99999", db_path=c_db, project="p-core")
 
@@ -563,11 +570,11 @@ with tempfile.TemporaryDirectory() as bitemp_tmp:
 # 10. Test Lifecycle Hooks System
 with tempfile.TemporaryDirectory() as hook_tmp:
     h_dir = Path(hook_tmp)
-    import hooks
+    from agi_memory import hooks
 
     # 10a. Test Claude Code hook installation & uninstallation in custom scope
     claude_settings = h_dir / ".claude" / "settings.json"
-    hooks.REPO_DIR = Path(__file__).resolve().parent
+    hooks.REPO_DIR = Path(__file__).resolve().parent.parent / "src" / "agi_memory"
     orig_home = Path.home()
     
     # Test installation directly on json
@@ -638,7 +645,7 @@ with tempfile.TemporaryDirectory() as mod_tmp:
     m_db = m_dir / "mod_test.db"
     m_vault = m_dir / "mod_vault"
 
-    import config
+    from agi_memory import config
     assert hasattr(config, "DATA_DIR")
     assert hasattr(config, "VAULT_DIR")
     assert hasattr(config, "DEFAULT_DB")
@@ -647,8 +654,8 @@ with tempfile.TemporaryDirectory() as mod_tmp:
 
     # Verify layers source code contains no imports of vault or sync
     import inspect
-    import layers.session_layer as sl_mod
-    import layers.graph_layer as gl_mod
+    import agi_memory.layers.session_layer as sl_mod
+    import agi_memory.layers.graph_layer as gl_mod
 
     sl_src = inspect.getsource(sl_mod)
     gl_src = inspect.getsource(gl_mod)
@@ -658,7 +665,7 @@ with tempfile.TemporaryDirectory() as mod_tmp:
     assert "import sync" not in gl_src and "from sync" not in gl_src, "graph_layer must not import sync"
 
     # Test SessionLayer on_record callback and listeners
-    from layers.session_layer import SessionLayer, add_record_listener, remove_record_listener
+    from agi_memory.layers.session_layer import SessionLayer, add_record_listener, remove_record_listener
     rec_events = []
     global_events = []
 
@@ -678,7 +685,7 @@ with tempfile.TemporaryDirectory() as mod_tmp:
     assert len(global_events) == 1  # Unregistered listener not called
 
     # Test GraphLayer on_edge callback and listeners
-    from layers.graph_layer import GraphLayer, add_edge_listener, remove_edge_listener
+    from agi_memory.layers.graph_layer import GraphLayer, add_edge_listener, remove_edge_listener
     edge_events = []
     global_edges = []
 
@@ -721,7 +728,7 @@ with tempfile.TemporaryDirectory() as boot_tmp:
     subprocess.run(["git", "commit", "-m", "fix: resolve memory leak in worker\n\nDetailed fix explanation."], cwd=proj_dir, capture_output=True, check=True)
 
     # Test bootstrap module
-    import bootstrap
+    from agi_memory import bootstrap
     detected_name = bootstrap.detect_project_name(proj_dir)
     assert detected_name == "sample-agent-app"
 
@@ -778,7 +785,7 @@ with tempfile.TemporaryDirectory() as boot_tmp:
     assert len(all_after_hard) == 2
 
     # Test mcp_server memory_bootstrap tool
-    import mcp_server
+    from agi_memory import mcp_server
     # Test call_tool memory_bootstrap
     tool_out = mcp_server.call_tool("memory_bootstrap", {"repo": str(proj_dir)})
     assert isinstance(tool_out, str)

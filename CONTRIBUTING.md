@@ -33,16 +33,16 @@ All core functionality is zero-dependency and tested offline:
 
 ```bash
 # Run the complete offline test suite (layers, SQLite FTS5, graph engine, integrate)
-python3 test_offline.py && python3 eval_l1.py && python3 eval_l2.py && python3 integrate.py test
+python3 tests/test_offline.py && python3 tests/eval_l1.py && python3 tests/eval_l2.py && agi-integrate test
 
 # Run the comprehensive 11-tier authentic stress test benchmark
-python3 stress_test.py
+python3 tests/stress_test.py
 
 # Check integration detection across assistants
-python3 integrate.py status
+agi-integrate status
 ```
 
-**Rule**: All PRs must pass `python3 test_offline.py && python3 eval_l1.py && python3 eval_l2.py && python3 integrate.py test && python3 stress_test.py` before submission.
+**Rule**: All PRs must pass `python3 tests/test_offline.py && python3 tests/eval_l1.py && python3 tests/eval_l2.py && agi-integrate test && python3 tests/stress_test.py` before submission.
 
 ---
 
@@ -59,6 +59,6 @@ python3 integrate.py status
 ## Submitting a Pull Request
 
 1. Fork the repository and create a feature branch from `main`.
-2. Ensure your changes follow PEP 8 and include offline tests in `test_offline.py`.
-3. Verify that `python test_offline.py` and `python integrate.py test` pass.
+2. Ensure your changes follow PEP 8 and include offline tests in `tests/test_offline.py`.
+3. Verify that `python3 tests/test_offline.py` and `agi-integrate test` pass.
 4. Submit a Pull Request with a clear description of the problem solved and test results.

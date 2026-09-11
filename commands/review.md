@@ -11,4 +11,4 @@ Review proposed changes against repository invariants:
 4. **Byte-for-Byte Assistant Parity**:
    - Ensure `CLAUDE.md` and `AGENTS.md` remain 100% byte-for-byte identical (`diff -u CLAUDE.md AGENTS.md` must be empty).
 5. **Offline Test Suite**:
-   - Run `python3 test_offline.py && python3 eval_l1.py && python3 eval_l2.py && python3 integrate.py test && python3 stress_test.py`.
+   - Run `python3 tests/test_offline.py && python3 tests/eval_l1.py && python3 tests/eval_l2.py && agi-integrate test && python3 tests/stress_test.py`.

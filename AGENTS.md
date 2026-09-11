@@ -41,6 +41,6 @@ When operating in this codebase:
 
 Always run before committing:
 ```bash
-python3 test_offline.py && python3 eval_l1.py && python3 eval_l2.py && python3 integrate.py test
-python3 stress_test.py
+python3 tests/test_offline.py && python3 tests/eval_l1.py && python3 tests/eval_l2.py && agi-integrate test
+python3 tests/stress_test.py
 ```

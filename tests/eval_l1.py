@@ -6,9 +6,13 @@ import json
 import re
 import tempfile
 import time
+import sys
 from pathlib import Path
+_SRC = Path(__file__).resolve().parent.parent / "src"
+if str(_SRC) not in sys.path:
+    sys.path.insert(0, str(_SRC))
 
-from layers.session_layer import SessionLayer
+from agi_memory.layers.session_layer import SessionLayer
 
 SAMPLE_DATA = [
     ("mobile-app", "Haptics Architecture", "Decided to use two tiny free functions (hapticTap, hapticToggle) rather than a service provider or singleton."),

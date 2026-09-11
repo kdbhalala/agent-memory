@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# agent-memory - Turnkey Zero-Dependency Installer
+# agi-memory - Turnkey Zero-Dependency Installer
 # Works on macOS and Linux (bash/zsh)
 # Usage:
-#   curl -fsSL https://raw.githubusercontent.com/kdbhalala/agent-memory/main/install.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/kdbhalala/agi-memory/main/install.sh | bash
 #   or from a local clone: ./install.sh
 # ==============================================================================
 
@@ -18,7 +18,7 @@ NC="\033[0m" # No Color
 
 echo -e "${BOLD}${BLUE}"
 echo "========================================================================"
-echo "          agent-memory: Universal AI Coding Assistant Memory            "
+echo "           agi-memory: Universal AI Coding Assistant Memory             "
 echo "========================================================================"
 echo -e "${NC}"
 
@@ -52,12 +52,12 @@ $PYTHON_BIN -c "import sqlite3, json, sys; sys.exit(0)" 2>/dev/null || {
 
 # 2. Determine installation location
 INSTALL_ROOT="$HOME/.agent-memory"
-SRC_DIR="$INSTALL_ROOT/src"
+SRC_DIR="$INSTALL_ROOT/src_repo"
 BIN_DIR="$HOME/.local/bin"
 
-# Check if script is run from an existing local git clone of agent-memory
+# Check if script is run from an existing local git clone of agi-memory
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" 2>/dev/null && pwd || echo "")"
-if [ -n "$SCRIPT_DIR" ] && [ -f "$SCRIPT_DIR/mcp_server.py" ] && [ -f "$SCRIPT_DIR/integrate.py" ]; then
+if [ -n "$SCRIPT_DIR" ] && [ -f "$SCRIPT_DIR/src/agi_memory/mcp_server.py" ]; then
     TARGET_SRC="$SCRIPT_DIR"
     echo -e "\n${BOLD}[2/6] Using local repository at:${NC} $TARGET_SRC"
 else
@@ -68,9 +68,9 @@ else
         echo "  Updating existing installation via git pull..."
         (cd "$TARGET_SRC" && git pull --quiet origin main 2>/dev/null || true)
     else
-        echo "  Cloning agent-memory repository..."
+        echo "  Cloning agi-memory repository..."
         rm -rf "$TARGET_SRC"
-        git clone --depth 1 https://github.com/kdbhalala/agent-memory.git "$TARGET_SRC" --quiet
+        git clone --depth 1 https://github.com/kdbhalala/agi-memory.git "$TARGET_SRC" --quiet
     fi
 fi
 
@@ -80,40 +80,46 @@ mkdir -p "$BIN_DIR"
 
 create_wrapper() {
     local cmd_name="$1"
-    local script_file="$2"
+    local mod_name="$2"
     local wrapper="$BIN_DIR/$cmd_name"
 
     cat <<WRAPPER > "$wrapper"
 #!/usr/bin/env bash
-exec "$PYTHON_BIN" "$TARGET_SRC/$script_file" "\$@"
+PYTHONPATH="$TARGET_SRC/src:\$PYTHONPATH" exec "$PYTHON_BIN" -m "agi_memory.$mod_name" "\$@"
 WRAPPER
     chmod +x "$wrapper"
-    echo -e "  ${GREEN}✓${NC} $cmd_name -> $TARGET_SRC/$script_file"
+    echo -e "  ${GREEN}✓${NC} $cmd_name -> agi_memory.$mod_name"
 }
 
-create_wrapper "agent-memory" "mcp_server.py"
-create_wrapper "agent-integrate" "integrate.py"
-create_wrapper "agent-hooks" "hooks.py"
-create_wrapper "agent-recall" "recall.py"
-create_wrapper "agent-sync" "sync.py"
+create_wrapper "agi-memory" "mcp_server"
+create_wrapper "agent-memory" "mcp_server"
+create_wrapper "agi-integrate" "integrate"
+create_wrapper "agent-integrate" "integrate"
+create_wrapper "agi-bootstrap" "bootstrap"
+create_wrapper "agent-bootstrap" "bootstrap"
+create_wrapper "agi-hooks" "hooks"
+create_wrapper "agent-hooks" "hooks"
+create_wrapper "agi-recall" "recall"
+create_wrapper "agent-recall" "recall"
+create_wrapper "agi-sync" "sync"
+create_wrapper "agent-sync" "sync"
 
 # 4. Initialize Vault
 echo -e "\n${BOLD}[4/6] Initializing canonical vault storage...${NC}"
-"$PYTHON_BIN" -c "
+PYTHONPATH="$TARGET_SRC/src:$PYTHONPATH" "$PYTHON_BIN" -c "
 import sys
-sys.path.insert(0, '$TARGET_SRC')
-import vault
+from agi_memory import vault
 v_dir = vault.init_vault()
 print(f'  ✓ Vault initialized at {v_dir}')
 "
 
 # 5. Run Turnkey Multi-Assistant Integration & Hooks
 echo -e "\n${BOLD}[5/6] Detecting and configuring coding assistants...${NC}"
-"$PYTHON_BIN" "$TARGET_SRC/integrate.py" install all --python "$PYTHON_BIN" --server "$TARGET_SRC/mcp_server.py"
+PYTHONPATH="$TARGET_SRC/src:$PYTHONPATH" "$PYTHON_BIN" -m agi_memory.integrate install all --python "$PYTHON_BIN" --server "$TARGET_SRC/src/agi_memory/mcp_server.py"
 
 # 6. Verify stdio MCP Protocol Handshake
 echo -e "\n${BOLD}[6/6] Verifying MCP server stdio protocol...${NC}"
-"$PYTHON_BIN" "$TARGET_SRC/integrate.py" test --python "$PYTHON_BIN" --server "$TARGET_SRC/mcp_server.py"
+PYTHONPATH="$TARGET_SRC/src:$PYTHONPATH" "$PYTHON_BIN" -m agi_memory.integrate test --python "$PYTHON_BIN" --server "$TARGET_SRC/src/agi_memory/mcp_server.py"
 
 # Check PATH
 PATH_OK=false
@@ -122,7 +128,7 @@ case ":$PATH:" in
 esac
 
 echo -e "\n${BOLD}${GREEN}========================================================================${NC}"
-echo -e "${BOLD}${GREEN}           agent-memory successfully installed and active!             ${NC}"
+echo -e "${BOLD}${GREEN}            agi-memory successfully installed and active!              ${NC}"
 echo -e "${BOLD}${GREEN}========================================================================${NC}"
 
 if [ "$PATH_OK" = false ]; then
@@ -132,7 +138,7 @@ if [ "$PATH_OK" = false ]; then
 fi
 
 echo -e "\nQuick Verification Commands:"
-echo -e "  ${BOLD}agent-integrate status${NC}     # Check assistant status"
-echo -e "  ${BOLD}agent-recall \"auth\"${NC}        # Query working memory"
-echo -e "  ${BOLD}agent-sync status${NC}          # Check Git vault sync"
+echo -e "  ${BOLD}agi-integrate status${NC}     # Check assistant status"
+echo -e "  ${BOLD}agi-recall \"auth\"${NC}        # Query working memory"
+echo -e "  ${BOLD}agi-sync status${NC}          # Check Git vault sync"
 echo ""

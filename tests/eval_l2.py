@@ -3,11 +3,16 @@ Zero tokens on native GraphLayer (SQLite CTEs).
 """
 import argparse
 import re
+import sys
 import tempfile
 import time
 from pathlib import Path
 
-from layers.graph_layer import GraphLayer
+_SRC = Path(__file__).resolve().parent.parent / "src"
+if str(_SRC) not in sys.path:
+    sys.path.insert(0, str(_SRC))
+
+from agi_memory.layers.graph_layer import GraphLayer
 
 ITEMS = [
     "[mobile-app] Haptics Architecture: decided to use two tiny free functions (hapticTap, hapticToggle) rather than a service provider.",
