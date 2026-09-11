@@ -33,7 +33,7 @@ def recall(query: str, l1: MemoryLayer, l2: MemoryLayer | None = None,
     return result
 
 
-if __name__ == "__main__":
+def main(argv: list[str] | None = None) -> None:
     import argparse
     from layers.session_layer import SessionLayer
     from layers.graph_layer import GraphLayer
@@ -43,7 +43,7 @@ if __name__ == "__main__":
     parser.add_argument("--project", "-p", default=None, help="Filter by project name")
     parser.add_argument("--limit", "-l", type=int, default=5, help="Hit limit (default 5)")
     parser.add_argument("--deep", "-d", action="store_true", help="Force deep recall from durable layer")
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     l1 = SessionLayer(project=args.project)
     l2 = GraphLayer(project=args.project)
@@ -66,3 +66,8 @@ if __name__ == "__main__":
             print(h.text)
     elif res.get("note"):
         print(f"\n({res['note']})")
+
+
+if __name__ == "__main__":
+    main()
+

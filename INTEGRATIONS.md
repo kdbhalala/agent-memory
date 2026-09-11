@@ -10,15 +10,31 @@ All tools share the same memory: an architectural pattern recorded in Claude Cod
 
 ---
 
-## Quickstart: Automated Setup
+## Quickstart: Installation Options
 
-### Option 1: Zero-Dependency One-Line Installer
+### Option 1: Homebrew (macOS & Linux)
+```bash
+brew install kdbhalala/tap/agent-memory
+```
+Places `agent-memory` on global `$PATH` (`/opt/homebrew/bin/agent-memory`). GUI assistants (Cursor, Claude Desktop, Windsurf) can launch it directly without python venv management.
+
+### Option 2: PyPI / uvx (Universal Python)
+```bash
+# Zero-install runtime
+uvx agent-memory
+
+# Isolated global CLI
+pipx install agent-memory
+# Or: pip install agent-memory
+```
+
+### Option 3: Zero-Dependency One-Line Installer
 ```bash
 curl -fsSL https://raw.githubusercontent.com/kdbhalala/agent-memory/main/install.sh | bash
 ```
 Installs CLI wrappers to `~/.local/bin`, initializes the vault, wires all detected assistants, and tests the MCP handshake in under 2 seconds.
 
-### Option 2: Python Integration CLI (`integrate.py`)
+### Option 4: Python Integration CLI (`integrate.py`)
 The repository includes a zero-dependency CLI (`integrate.py` / `agent-integrate`) that detects installed coding assistants on your system, inspects their configuration, and wires the MCP server and proactive memory rules automatically.
 
 ### 1. Check Status

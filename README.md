@@ -164,21 +164,33 @@ graph TD
 
 ## Turnkey Setup in 10 Seconds
 
-### Option A: One-Line Installer (Recommended)
+### Option A: Homebrew (macOS & Linux)
+Places `agent-memory` globally on your `$PATH` (`/opt/homebrew/bin/agent-memory`). All GUI assistants (Cursor, Claude Desktop, Windsurf) and terminal CLIs discover it with zero path configuration:
+```bash
+brew install kdbhalala/tap/agent-memory
+```
+
+### Option B: PyPI / uvx (Universal Python)
+Run instantly without installation in MCP clients, or install globally via `pipx` or `pip`:
+```bash
+# Zero-install execution
+uvx agent-memory
+
+# Global CLI installation
+pipx install agent-memory
+# Or: pip install agent-memory
+```
+
+### Option C: One-Line Installer Script
 Zero external dependencies. Automatically verifies Python 3.10+, installs CLI binaries (`agent-memory`, `agent-integrate`, `agent-bootstrap`, `agent-hooks`, `agent-recall`, `agent-sync`) into `~/.local/bin`, initializes your canonical vault, and wires all 12 coding assistants with lifecycle hooks:
 ```bash
 curl -fsSL https://raw.githubusercontent.com/kdbhalala/agent-memory/main/install.sh | bash
 ```
 
-### Option B: Local Repository Clone
+### Option D: Local Repository Clone
 ```bash
 git clone https://github.com/kdbhalala/agent-memory.git
 cd agent-memory
-./install.sh
-```
-
-### Option C: Python CLI Setup
-```bash
 python3 integrate.py install all
 ```
 

@@ -275,7 +275,7 @@ def reply(mid, result=None, error=None):
     sys.stdout.flush()
 
 
-def main():
+def run_mcp_server():
     for line in sys.stdin:
         line = line.strip()
         if not line:
@@ -465,53 +465,61 @@ def cmd_recall(argv: list[str]) -> None:
     print(res)
 
 
-if __name__ == "__main__":
-    if len(sys.argv) > 1:
-        cmd = sys.argv[1].lower()
+def main(argv: list[str] | None = None) -> None:
+    if argv is None:
+        argv = sys.argv[1:]
+
+    if argv:
+        cmd = argv[0].lower()
         if cmd == "integrate":
             import integrate
-            sys.argv = [sys.argv[0]] + sys.argv[2:]
+            sys.argv = [sys.argv[0]] + argv[1:]
             integrate.main()
-            sys.exit(0)
+            return
         elif cmd in ("hooks", "status", "install", "scaffold", "uninstall", "test", "generate"):
             import integrate
+            sys.argv = [sys.argv[0]] + argv
             integrate.main()
-            sys.exit(0)
+            return
         elif cmd == "sync":
-            if len(sys.argv) > 2 and sys.argv[2] in ("now", "dedupe", "init", "status"):
+            if len(argv) > 1 and argv[1] in ("now", "dedupe", "init", "status"):
                 import sync
-                sys.argv = [sys.argv[0]] + sys.argv[2:]
+                sys.argv = [sys.argv[0]] + argv[1:]
                 sync.main()
-                sys.exit(0)
+                return
             else:
                 import integrate
+                sys.argv = [sys.argv[0]] + argv
                 integrate.main()
-                sys.exit(0)
+                return
         elif cmd == "bootstrap":
             import bootstrap
-            bootstrap.main(sys.argv[2:])
-            sys.exit(0)
+            bootstrap.main(argv[1:])
+            return
         elif cmd == "log":
-            cmd_log(sys.argv[2:])
-            sys.exit(0)
+            cmd_log(argv[1:])
+            return
         elif cmd == "inspect":
-            cmd_inspect(sys.argv[2:])
-            sys.exit(0)
+            cmd_inspect(argv[1:])
+            return
         elif cmd == "delete":
-            cmd_delete(sys.argv[2:])
-            sys.exit(0)
+            cmd_delete(argv[1:])
+            return
         elif cmd == "pin":
-            cmd_pin(sys.argv[2:])
-            sys.exit(0)
+            cmd_pin(argv[1:])
+            return
         elif cmd == "unpin":
-            cmd_unpin(sys.argv[2:])
-            sys.exit(0)
+            cmd_unpin(argv[1:])
+            return
         elif cmd == "blocks":
-            cmd_blocks(sys.argv[2:])
-            sys.exit(0)
+            cmd_blocks(argv[1:])
+            return
         elif cmd == "recall":
-            cmd_recall(sys.argv[2:])
-            sys.exit(0)
+            cmd_recall(argv[1:])
+            return
+        elif cmd in ("-v", "--version", "version"):
+            print("agent-memory 0.1.0")
+            return
         elif cmd in ("-h", "--help", "help"):
             print("agent-memory: Zero-dependency two-layer AI memory framework with MCP server.\n")
             print("Usage:")
@@ -529,5 +537,14 @@ if __name__ == "__main__":
             print("  agent-memory status                  Show MCP integration status")
             print("  agent-memory sync [now|dedupe|init]  Manage multi-device vault synchronization")
             print("  agent-memory test                    Verify MCP handshake and registered tools\n")
-            sys.exit(0)
+            return
+        else:
+            print(f"Unknown command: {cmd}. Run 'agent-memory --help' for usage.", file=sys.stderr)
+            sys.exit(1)
+
+    run_mcp_server()
+
+
+if __name__ == "__main__":
     main()
+

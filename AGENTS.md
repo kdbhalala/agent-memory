@@ -24,6 +24,7 @@ When operating in this codebase:
 - `bootstrap.py`: Zero-touch cold-start memory seeder from Git history & README (`agent-memory bootstrap`).
 - `mcp_server.py`: Model Context Protocol server exposing 9 tools (`memory_recall`, `memory_recall_deep`, `memory_record`, `memory_promote`, `memory_sync`, `memory_pin`, `memory_unpin`, `memory_blocks`, `memory_bootstrap`) and developer observability CLI (`log`, `inspect`, `delete`, `pin`, `unpin`, `blocks`, `bootstrap`).
 - `integrate.py`: Automated multi-assistant installer, cold-start seeder (`agent-integrate bootstrap`), hook integrator (`agent-integrate hooks`), and project scaffolder.
+- `Formula/agent-memory.rb`: Official Homebrew formula for tap distribution (`brew install kdbhalala/tap/agent-memory`).
 
 ## Modular Rules & Context
 
