@@ -70,7 +70,7 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: pypi
-      url: https://pypi.org/p/agent-memory
+      url: https://pypi.org/p/agi-memory
     permissions:
       id-token: write
     steps:

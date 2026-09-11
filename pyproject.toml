@@ -1,12 +1,12 @@
 [project]
-name = "agent-memory"
+name = "agi-memory"
 version = "0.1.0"
 description = "Turnkey zero-dependency two-layer memory architecture (SQLite FTS5 + Recursive Knowledge Graph) with MCP server for Claude Code, Cursor, Codex, OpenCode, and more"
 readme = "README.md"
 requires-python = ">=3.10"
 license = "MIT"
 authors = [{ name = "Krunal Bhalala" }]
-keywords = ["mcp", "ai-memory", "knowledge-graph", "claude-code", "cursor", "codex", "opencode", "llm", "sqlite"]
+keywords = ["mcp", "agi-memory", "ai-memory", "knowledge-graph", "claude-code", "cursor", "codex", "opencode", "llm", "sqlite"]
 classifiers = [
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.10",
@@ -26,6 +26,7 @@ include = ["layers*"]
 py-modules = ["config", "mcp_server", "integrate", "bootstrap", "hooks", "recall", "promote", "sync", "vault", "stress_test", "eval_l1", "eval_l2", "test_offline"]
 
 [project.scripts]
+agi-memory = "mcp_server:main"
 agent-memory = "mcp_server:main"
 agent-integrate = "integrate:main"
 agent-bootstrap = "bootstrap:main"

@@ -4,18 +4,18 @@
 
 ---
 
-## 1. PyPI Distribution
+## 1. PyPI Distribution (`agi-memory`)
 
-Published to [PyPI](https://pypi.org/project/agent-memory/):
+Published to [PyPI](https://pypi.org/project/agi-memory/):
 ```bash
 # Direct install
-pip install agent-memory
+pip install agi-memory
 
 # Isolated CLI installation
-pipx install agent-memory
+pipx install agi-memory
 
 # Zero-install execution
-uvx agent-memory
+uvx agi-memory
 ```
 
 ### Universal MCP Configuration (PyPI / uvx)
@@ -25,7 +25,7 @@ In any assistant config (`.cursor/mcp.json`, `claude_desktop_config.json`, `wind
   "mcpServers": {
     "agent-memory": {
       "command": "uvx",
-      "args": ["agent-memory"]
+      "args": ["agi-memory"]
     }
   }
 }

@@ -170,15 +170,15 @@ Places `agent-memory` globally on your `$PATH` (`/opt/homebrew/bin/agent-memory`
 brew install kdbhalala/tap/agent-memory
 ```
 
-### Option B: PyPI / uvx (Universal Python)
+### Option B: PyPI / uvx (Universal Python - `agi-memory`)
 Run instantly without installation in MCP clients, or install globally via `pipx` or `pip`:
 ```bash
-# Zero-install execution
-uvx agent-memory
+# Zero-install execution in MCP clients (Claude Code, Cursor, Windsurf)
+uvx agi-memory
 
 # Global CLI installation
-pipx install agent-memory
-# Or: pip install agent-memory
+pipx install agi-memory
+# Or: pip install agi-memory
 ```
 
 ### Option C: One-Line Installer Script

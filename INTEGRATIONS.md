@@ -18,14 +18,14 @@ brew install kdbhalala/tap/agent-memory
 ```
 Places `agent-memory` on global `$PATH` (`/opt/homebrew/bin/agent-memory`). GUI assistants (Cursor, Claude Desktop, Windsurf) can launch it directly without python venv management.
 
-### Option 2: PyPI / uvx (Universal Python)
+### Option 2: PyPI / uvx (Universal Python - `agi-memory`)
 ```bash
 # Zero-install runtime
-uvx agent-memory
+uvx agi-memory
 
 # Isolated global CLI
-pipx install agent-memory
-# Or: pip install agent-memory
+pipx install agi-memory
+# Or: pip install agi-memory
 ```
 
 ### Option 3: Zero-Dependency One-Line Installer
