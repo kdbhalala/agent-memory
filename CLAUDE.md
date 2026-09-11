@@ -24,7 +24,7 @@ When operating in this codebase:
 - `bootstrap.py`: Zero-touch cold-start memory seeder from Git history & README (`agi-memory bootstrap`).
 - `mcp_server.py`: Model Context Protocol server exposing 9 tools (`memory_recall`, `memory_recall_deep`, `memory_record`, `memory_promote`, `memory_sync`, `memory_pin`, `memory_unpin`, `memory_blocks`, `memory_bootstrap`) and developer observability CLI (`log`, `inspect`, `delete`, `pin`, `unpin`, `blocks`, `bootstrap`).
 - `integrate.py`: Automated multi-assistant installer, cold-start seeder (`agi-integrate bootstrap`), hook integrator (`agi-integrate hooks`), and project scaffolder.
-- `Formula/agi-memory.rb`: Official Homebrew formula for tap distribution (`brew install kdbhalala/tap/agi-memory`).
+- `Formula/agi-memory.rb`: Official Homebrew formula (`brew tap kdbhalala/agi-memory https://github.com/kdbhalala/agi-memory && brew install agi-memory`).
 
 ## Modular Rules & Context
 

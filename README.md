@@ -168,7 +168,8 @@ graph TD
 ### Option A: Homebrew (macOS & Linux)
 Places `agi-memory` globally on your `$PATH` (`/opt/homebrew/bin/agi-memory`). All GUI assistants (Cursor, Claude Desktop, Windsurf) and terminal CLIs discover it with zero path configuration:
 ```bash
-brew install kdbhalala/tap/agi-memory
+brew tap kdbhalala/agi-memory https://github.com/kdbhalala/agi-memory
+brew install agi-memory
 ```
 
 ### Option B: PyPI / uvx (Universal Python - `agi-memory`)

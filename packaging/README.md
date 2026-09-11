@@ -33,17 +33,16 @@ In any assistant config (`.cursor/mcp.json`, `claude_desktop_config.json`, `wind
 
 ---
 
-## 2. Homebrew Distribution
+## 2. Homebrew Distribution (Single Repo — Zero Extra Repositories)
 
-Distributed via the Homebrew tap `kdbhalala/homebrew-tap`.
+`agi-memory` can be tapped and installed directly from this repository:
 
 ### User Installation
 ```bash
-# Install directly from the tap
-brew install kdbhalala/tap/agi-memory
+# Tap directly from this repository
+brew tap kdbhalala/agi-memory https://github.com/kdbhalala/agi-memory
 
-# Or tap first
-brew tap kdbhalala/tap
+# Install agi-memory
 brew install agi-memory
 ```
 

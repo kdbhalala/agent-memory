@@ -14,9 +14,10 @@ All tools share the same memory: an architectural pattern recorded in Claude Cod
 
 ### Option 1: Homebrew (macOS & Linux)
 ```bash
-brew install kdbhalala/tap/agent-memory
+brew tap kdbhalala/agi-memory https://github.com/kdbhalala/agi-memory
+brew install agi-memory
 ```
-Places `agent-memory` on global `$PATH` (`/opt/homebrew/bin/agent-memory`). GUI assistants (Cursor, Claude Desktop, Windsurf) can launch it directly without python venv management.
+Places `agi-memory` on global `$PATH` (`/opt/homebrew/bin/agi-memory`). GUI assistants (Cursor, Claude Desktop, Windsurf) can launch it directly without python venv management.
 
 ### Option 2: PyPI / uvx (Universal Python - `agi-memory`)
 ```bash
