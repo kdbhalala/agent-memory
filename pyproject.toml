@@ -1,7 +1,7 @@
 [project]
 name = "agi-memory"
-version = "0.1.1"
-description = "Turnkey zero-dependency two-layer memory architecture (SQLite FTS5 + Recursive Knowledge Graph) with MCP server for Claude Code, Cursor, Codex, OpenCode, and more"
+version = "0.2.0"
+description = "Turnkey zero-dependency four-pillar cognitive memory framework (Epistemic, Semantic, Episodic, Structural Code Graph) with MCP server for Claude Code, Cursor, Codex, OpenCode, Antigravity, and more"
 readme = "README.md"
 requires-python = ">=3.10"
 license = "MIT"

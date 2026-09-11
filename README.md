@@ -7,23 +7,22 @@
 [![Latency](https://img.shields.io/badge/L2%20graph%20latency-0.35ms-blue.svg)](tests/eval_l2.py)
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue.svg)](pyproject.toml)
 
-**Zero-dependency, high-performance two-layer memory architecture (SQLite FTS5 + Native Recursive Knowledge Graph) for AI coding assistants.**
+**Zero-dependency, high-performance four-pillar cognitive memory framework (Epistemic, Semantic, Episodic, Structural Code Graph) for AI coding assistants.**
 
-Share synchronized context, recent bugfixes, and durable architectural decisions seamlessly across **Claude Code**, **Cursor**, **Windsurf**, **OpenAI Codex**, **OpenCode**, **Antigravity CLI**, **Aider**, **Goose**, **Cline**, **Roo Code**, **Crush**, and **Pi**.
+Share synchronized context, recent bugfixes, durable architectural decisions, session timelines, and codebase structure seamlessly across **Claude Code**, **Cursor**, **Windsurf**, **OpenAI Codex**, **OpenCode**, **Antigravity CLI**, **Aider**, **Goose**, **Cline**, **Roo Code**, **Crush**, and **Pi**.
 
 ---
 
-## Why agent-memory? (Measurable Benchmarks)
+## Why agi-memory? The 4 Cognitive Memory Pillars
 
-Most AI memory architectures suffer from three fatal flaws for day-to-day coding:
-1. **Bloated dependencies**: Multi-gigabyte installs with PyTorch, ONNX, and heavy vector databases.
-2. **High latency & token cost**: Hundreds of milliseconds for vector embeddings, or multi-second round-trips to cloud LLMs that burn thousands of tokens per search.
-3. **Fragile multi-device sync**: Binary SQLite or vector index databases that corrupt or conflict when synced across machines with Git.
+Most AI memory architectures solve only a fragment of developer memory while incurring heavy dependencies or requiring background Node.js daemons. `agi-memory` unifies all four cognitive memory pillars in pure Python stdlib + SQLite (<35MB RAM, <1ms speed, zero external pip dependencies):
 
-`agent-memory` solves this with a **zero-dependency, two-layer native architecture**:
-- **L1 Working Memory**: SQLite FTS5 with BM25 ranking (<2 ms retrieval, zero tokens).
-- **L2 Knowledge Graph**: SQLite native recursive CTEs (<0.5 ms multi-hop traversal, zero tokens).
-- **Canonical Vault**: Git-friendly append-only JSONL with deterministic GUIDs and background sync.
+| Pillar | Core Question | Replaces | Implementation in `agi-memory` | Latency / Overhead |
+|---|---|---|---|---|
+| **1. Epistemic** | *"What have we learned?"* | Ad-hoc `.cursorrules`, forgotten bugfixes | `SessionLayer` (SQLite FTS5 + BM25, Core Blocks) | **0.23 ms** (zero tokens) |
+| **2. Semantic** | *"What does our information mean & how is it connected?"* | Heavy GraphRAG, Cognee, ChromaDB | `GraphLayer` (Native SQLite Recursive CTEs) | **0.28 ms** (zero tokens) |
+| **3. Episodic** | *"What happened during previous agent sessions?"* | `claude-mem` (heavy Node/Bun daemons) | `EpisodicLayer` (SQLite Session History & Lifecycle) | **0.23 ms** (zero daemons) |
+| **4. Structural** | *"How is this codebase structurally connected?"* | `Graphify`, Tree-sitter binaries, LSP daemons | `CodeLayer` (stdlib AST + Streaming Regex Graph) | **0.45 ms** (zero daemons) |
 
 ### Comprehensive Benchmark Comparison
 
@@ -135,30 +134,44 @@ graph TD
         CR["Crush / Pi"]
     end
 
-    MCP["agent-memory MCP Server (stdio)<br/><code>memory_recall</code> · <code>memory_recall_deep</code> · <code>memory_record</code> · <code>memory_promote</code> · <code>memory_sync</code><br/><code>memory_pin</code> · <code>memory_unpin</code> · <code>memory_blocks</code> · <code>memory_bootstrap</code>"]
+    MCP["agi-memory MCP Server (15 Stdio Tools)<br/><b>Epistemic:</b> <code>memory_recall</code> · <code>memory_recall_deep</code> · <code>memory_record</code> · <code>memory_pin</code> · <code>memory_unpin</code> · <code>memory_blocks</code><br/><b>Semantic:</b> <code>memory_promote</code> · <code>memory_sync</code> · <code>memory_bootstrap</code><br/><b>Episodic:</b> <code>memory_timeline</code><br/><b>Structural:</b> <code>code_structure</code> · <code>code_callers</code> · <code>code_dependencies</code> · <code>code_impact</code> · <code>code_index</code>"]
 
-    subgraph Storage ["Native Two-Layer Storage (Zero Dependencies)"]
-        L1["L1 Working Memory (SQLite FTS5)<br/>1.82ms · BM25 Ranking · Auto-bootstrapped"]
-        L2["L2 Knowledge Graph (SQLite Recursive CTEs)<br/>0.35ms · Multi-hop Graph Traversal · Triples"]
+    subgraph Storage ["Native Four-Pillar Cognitive Architecture (Zero Dependencies)"]
+        L1["L1 Epistemic Working Memory (SQLite FTS5)<br/>0.23ms · BM25 Ranking · Pinned Core Blocks"]
+        L2["L2 Semantic Knowledge Graph (SQLite Recursive CTEs)<br/>0.28ms · Multi-hop Graph Traversal · Bi-Temporal Edges"]
+        L3["L3 Episodic Session History (SQLite Timelines)<br/>0.23ms · Session Lifecycles · Git Commit Tracking"]
+        L4["L4 Structural Code Graph (AST + Regex)<br/>0.45ms · Callers · Dependencies · Blast-Radius Impact"]
     end
 
     CC & CU & CX & OC & AG & AD & GS & CL & CR <--> MCP
     MCP <--> L1
     MCP <--> L2
-    L1 -. "In-Flight Synthesis & Curated Promotion" .-> L2
+    MCP <--> L3
+    MCP <--> L4
+    L1 -. "In-Flight Synthesis & Auto-Promotion" .-> L2
+    L3 -. "Session Context Injection" .-> L1
+    L4 -. "Code Structure & Blast Radius" .-> L1
 ```
 
-1. **L1 Working Memory (`src/agi_memory/layers/session_layer.py`)**:
-   - Sub-2ms full-text search with BM25 ranking over recent session observations and tool fixes.
-   - Real-time conflict steering (<1ms) detecting overlapping precedents and prompting agents to resolve contradictions.
-   - Automatically self-bootstraps SQLite schema and triggers on first read/write with zero daemons required.
+1. **L1 Epistemic Working Memory (`src/agi_memory/layers/session_layer.py`)**:
+   - Sub-millisecond full-text search with BM25 ranking over recent session observations, bug fixes, and pinned core invariants.
+   - Real-time conflict steering detecting overlapping precedents and prompting agents to resolve contradictions.
+   - Core Memory blocks (`memory_pin`, `memory_unpin`, `memory_blocks`) unconditionally injected at session start.
    - Direct developer inspection & deletion APIs (`get_observation`, `delete_observation`, `list_observations`).
 2. **L2 Semantic Knowledge Graph (`src/agi_memory/layers/graph_layer.py`)**:
    - Native SQLite graph tables (`graph_nodes`, `graph_edges`) with full-text search (`FTS5`).
-   - Sub-millisecond (0.35ms) multi-hop recursive graph traversal using SQL Common Table Expressions (`WITH RECURSIVE`).
-   - Host-native in-flight triple extraction during tool calls + zero-token heuristic extraction.
-3. **Zero-Touch Cold-Start Seeder (`src/agi_memory/bootstrap.py`)**:
-   - Analyzes repository `README.md` and high-signal Git history (`git log`) to seed initial L1 working memories on Day 1.
+   - Sub-millisecond (0.28ms) multi-hop recursive graph traversal using SQL Common Table Expressions (`WITH RECURSIVE`).
+   - Bi-temporal edge invalidation and pure-SQL entity alias resolution (<0.01ms).
+3. **L3 Episodic Session History (`src/agi_memory/layers/episodic_layer.py`)**:
+   - Zero-dependency episodic memory answering *"What happened during previous agent sessions?"*
+   - Tracks session start/end lifecycles, duration, touched files, events, and git commit deltas.
+   - Cross-session recaps automatically injected on session start, giving every assistant instant continuity across restarts.
+4. **L4 Structural Code Graph (`src/agi_memory/layers/code_layer.py`)**:
+   - Zero-dependency code intelligence answering *"How is this codebase structurally connected?"*
+   - Python stdlib `ast` + streaming regex parser for TypeScript, JavaScript, Go, Rust, and Dart with sha256 incremental hashing.
+   - Microsecond symbol search (`code_structure`), incoming callers (`code_callers`), outbound imports/dependencies (`code_dependencies`), and blast-radius impact analysis (`code_impact`).
+5. **Zero-Touch Cold-Start Seeder (`src/agi_memory/bootstrap.py`)**:
+   - Automatically parses `README.md`, recent git commit logs, and indexes codebase symbols into L1 and L4 on Day 1.
    - Idempotent and zero-dependency, eliminating empty-vault churn.
 
 ---
@@ -171,7 +184,14 @@ Zero external dependencies. Automatically verifies Python 3.10+, installs CLI bi
 curl -fsSL https://raw.githubusercontent.com/kdbhalala/agi-memory/main/install.sh | bash
 ```
 
-### Option B: PyPI / uvx (Universal Python - `agi-memory`)
+### Option B: Homebrew (macOS & Linux)
+Places `agi-memory` globally on your `$PATH` (`/opt/homebrew/bin/agi-memory`). All GUI assistants (Cursor, Claude Desktop, Windsurf) and terminal CLIs discover it with zero path configuration:
+```bash
+brew tap kdbhalala/agi-memory https://github.com/kdbhalala/agi-memory
+brew install agi-memory
+```
+
+### Option C: PyPI / uvx (Universal Python - `agi-memory`)
 Run instantly without installation in MCP clients, or install globally via `pipx` or `pip`:
 ```bash
 # Zero-install execution in MCP clients (Claude Code, Cursor, Windsurf)
@@ -180,13 +200,6 @@ uvx agi-memory
 # Global CLI installation
 pipx install agi-memory
 # Or: pip install agi-memory
-```
-
-### Option C: Homebrew (macOS & Linux)
-Places `agi-memory` globally on your `$PATH` (`/opt/homebrew/bin/agi-memory`). All GUI assistants (Cursor, Claude Desktop, Windsurf) and terminal CLIs discover it with zero path configuration:
-```bash
-brew tap kdbhalala/agi-memory https://github.com/kdbhalala/agi-memory
-brew install agi-memory
 ```
 
 ### Option D: Local Repository Clone
@@ -294,9 +307,9 @@ agent-sync init git@github.com:username/my-agent-memory-vault.git
 
 ## Supported Assistants Matrix
 
-Every integrated tool gains access to 9 native tools: `memory_recall`, `memory_recall_deep`, `memory_record`, `memory_promote`, `memory_sync`, `memory_pin`, `memory_unpin`, `memory_blocks`, and `memory_bootstrap`:
+Every integrated tool gains access to 15 native tools: `memory_recall`, `memory_recall_deep`, `memory_record`, `memory_promote`, `memory_sync`, `memory_pin`, `memory_unpin`, `memory_blocks`, `memory_bootstrap`, `memory_timeline`, `code_structure`, `code_callers`, `code_dependencies`, `code_impact`, and `code_index`:
 
-| Assistant / Environment | Type | agent-memory MCP Config | Proactive Memory Discipline Rules |
+| Assistant / Environment | Type | agi-memory MCP Config | Proactive Memory Discipline Rules |
 |---|---|---|---|
 | **Claude Code** | CLI | `~/.claude.json` ✓ | `~/.claude/CLAUDE.md` ✓ |
 | **Cursor** | IDE | `~/.cursor/mcp.json` ✓ | `~/.cursor/rules/agent-memory.mdc` ✓ |
@@ -317,37 +330,47 @@ Every integrated tool gains access to 9 native tools: `memory_recall`, `memory_r
 ## CLI Usage
 
 ### Developer Observability & Curation CLI
-Audit, inspect, and curate memories directly from the terminal:
+Audit, inspect, and curate memories and codebase graphs directly from the terminal:
 ```bash
 # List recent observations in a clean tabular view
-agent-memory log -n 20 --project my-app
+agi-memory log -n 20 --project my-app
 
 # Inspect detailed facts, concepts, and full narrative of an observation
-agent-memory inspect 101
+agi-memory inspect 101
 
 # Soft-delete (mark superseded) or permanently purge an observation
-agent-memory delete 101
-agent-memory delete 101 --hard
+agi-memory delete 101
+agi-memory delete 101 --hard
 
-# Bootstrap initial memories on a new repo from Git history & README
-agent-memory bootstrap --repo .
+# Inspect episodic session timeline
+agi-memory timeline -n 10 --project my-app
+
+# Structural code graph queries
+agi-memory structure src/ --project my-app
+agi-memory callers SessionLayer --project my-app
+agi-memory dependencies recall --project my-app
+agi-memory impact SessionLayer --project my-app
+agi-memory index src/ --project my-app
+
+# Bootstrap initial memories on a new repo from Git history, README & code symbols
+agi-memory bootstrap --repo .
 
 # Query working & durable memory directly
-agent-memory recall "state management architecture" --deep
+agi-memory recall "state management architecture" --deep
 
 # Manage pinned core memory invariants
-agent-memory pin "zero_pip_deps" "Zero external pip dependencies" --category architecture
-agent-memory blocks
-agent-memory unpin "zero_pip_deps"
+agi-memory pin "zero_pip_deps" "Zero external pip dependencies" --category architecture
+agi-memory blocks
+agi-memory unpin "zero_pip_deps"
 ```
 
 ### Curating Knowledge (L1 -> L2 Knowledge Graph)
 ```bash
 # Preview durable candidates (zero tokens)
-python promote.py --dry-run --project my-app
+python3 -m agi_memory.promote --dry-run --project my-app
 
 # Ingest high-signal learnings into the native knowledge graph
-python promote.py --project my-app --limit 20
+python3 -m agi_memory.promote --project my-app --limit 20
 ```
 
 ---
@@ -355,15 +378,19 @@ python promote.py --project my-app --limit 20
 ## Python API
 
 ```python
-from layers.session_layer import SessionLayer
-from layers.graph_layer import GraphLayer
-from recall import recall
-from bootstrap import bootstrap_project
+from agi_memory.layers.session_layer import SessionLayer
+from agi_memory.layers.graph_layer import GraphLayer
+from agi_memory.layers.episodic_layer import EpisodicLayer
+from agi_memory.layers.code_layer import CodeLayer
+from agi_memory.recall import recall
+from agi_memory.bootstrap import bootstrap_project
 
 l1 = SessionLayer(project="my-app")
 l2 = GraphLayer(project="my-app")
+l3 = EpisodicLayer(project="my-app")
+l4 = CodeLayer(project="my-app")
 
-# Save a decision with in-flight graph triples and conflict detection
+# 1. Epistemic: Save a decision with in-flight graph triples and conflict detection
 res = l1.record(
     text="Always use secure_storage for JWT tokens on mobile",
     title="JWT Storage Rule",
@@ -371,21 +398,26 @@ res = l1.record(
     supersedes="#101"
 )
 
-# Ingest relations into L2 graph directly
+# 2. Semantic: Ingest relations into L2 graph directly
 l2.add_edge("AuthService", "USES", "SecureStorage", "AuthService persists tokens in SecureStorage")
 
 # Fast L1 working memory search (<2ms)
 search_hits = l1.search("JWT tokens")
 
-# Deep multi-hop graph recall (0.35ms)
+# Deep multi-hop graph recall (0.28ms)
 deep_res = recall("auth storage", l1, l2, deep=True)
 
-# Inspection & curation APIs
-obs = l1.get_observation(res["id"])
-recent = l1.list_observations(limit=10, project="my-app")
-l1.delete_observation(res["id"])
+# 3. Episodic: Session timeline & cross-session recap (<0.25ms)
+sessions = l3.get_timeline(limit=5)
+recap = l3.format_session_recap()
 
-# Cold-start memory bootstrapping from Git history & README
+# 4. Structural: Code graph indexing, caller lookups, and blast-radius (<0.5ms)
+l4.index_directory("src")
+callers = l4.get_callers("SessionLayer")
+deps = l4.get_dependencies("recall")
+blast_radius = l4.impact_analysis("SessionLayer")
+
+# Cold-start memory bootstrapping from Git history, README, and code symbols
 boot_res = bootstrap_project(repo_dir=".", max_commits=20, project="my-app")
 ```
 
@@ -396,7 +428,7 @@ boot_res = bootstrap_project(repo_dir=".", max_commits=20, project="my-app")
 All tests run completely offline with zero API keys or external services:
 
 ```bash
-# Run unit & layer tests (all 12 offline test suites)
+# Run unit & layer tests (all 14 offline test suites)
 python3 tests/test_offline.py
 
 # Evaluate L1 working memory retrieval accuracy (10/10, <2ms)
@@ -405,10 +437,10 @@ python3 tests/eval_l1.py
 # Evaluate L2 knowledge graph multi-hop traversal (6/6, <0.5ms)
 python3 tests/eval_l2.py
 
-# Verify stdio MCP server protocol handshake across all 9 tools
+# Verify stdio MCP server protocol handshake across all 15 tools
 agi-integrate test
 
-# Run comprehensive 11-tier authentic production stress test
+# Run comprehensive 12-tier authentic production stress test
 python3 tests/stress_test.py
 ```
 

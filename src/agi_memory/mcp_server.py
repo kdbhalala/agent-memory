@@ -18,6 +18,8 @@ import sys
 try:
     from agi_memory.layers.base import MemoryLayer  # noqa: F401
     from agi_memory.layers.session_layer import SessionLayer
+    from agi_memory.layers.episodic_layer import EpisodicLayer
+    from agi_memory.layers.code_layer import CodeLayer
     from agi_memory.recall import recall
     from agi_memory import sync, vault
     from agi_memory import __version__
@@ -25,10 +27,12 @@ except ImportError:
     sys.path.insert(0, __file__.rsplit("/", 1)[0])
     from layers.base import MemoryLayer  # noqa: F401
     from layers.session_layer import SessionLayer
+    from layers.episodic_layer import EpisodicLayer
+    from layers.code_layer import CodeLayer
     from recall import recall
     import sync
     import vault
-    __version__ = "0.1.1"
+    __version__ = "0.2.0"
 
 TOOLS = [
     {"name": "memory_recall",
@@ -99,6 +103,47 @@ TOOLS = [
                      "properties": {"repo": {"type": "string", "description": "Repository path (default: .)", "default": "."},
                                     "project": {"type": "string", "description": "Optional project name override"},
                                     "max_commits": {"type": "integer", "default": 20, "description": "Max git commits to parse"}},
+                     "required": []}},
+    {"name": "memory_timeline",
+     "description": "Inspect past agent session timelines, goals, touched files, commit deltas, and cross-session recaps (episodic memory).",
+     "inputSchema": {"type": "object",
+                     "properties": {"project": {"type": "string", "description": "Optional project name filter"},
+                                    "limit": {"type": "integer", "default": 5, "description": "Max sessions to return"},
+                                    "session_id": {"type": "string", "description": "Specific session ID to inspect"}},
+                     "required": []}},
+    {"name": "code_structure",
+     "description": "Get structural outline of classes, functions, methods, and types in a file or directory (structural code graph).",
+     "inputSchema": {"type": "object",
+                     "properties": {"path": {"type": "string", "default": ".", "description": "File or directory path to inspect"},
+                                    "project": {"type": "string", "description": "Optional project name filter"}},
+                     "required": []}},
+    {"name": "code_callers",
+     "description": "Find all inbound callers and usages of a function, class, or method across the codebase using recursive CTE.",
+     "inputSchema": {"type": "object",
+                     "properties": {"symbol": {"type": "string", "description": "Target symbol or method name"},
+                                    "project": {"type": "string", "description": "Optional project name filter"},
+                                    "max_depth": {"type": "integer", "default": 3, "description": "Max recursive traversal depth (hops)"}},
+                     "required": ["symbol"]}},
+    {"name": "code_dependencies",
+     "description": "Find all outbound dependencies, calls, and imports made by a symbol or module using recursive CTE.",
+     "inputSchema": {"type": "object",
+                     "properties": {"symbol": {"type": "string", "description": "Target symbol, class, or module name"},
+                                    "project": {"type": "string", "description": "Optional project name filter"},
+                                    "max_depth": {"type": "integer", "default": 3, "description": "Max recursive traversal depth (hops)"}},
+                     "required": ["symbol"]}},
+    {"name": "code_impact",
+     "description": "Calculate transitive blast radius and impact analysis for modifying a symbol or file (up to N hops) using recursive CTE.",
+     "inputSchema": {"type": "object",
+                     "properties": {"target": {"type": "string", "description": "Target symbol name or file path to analyze"},
+                                    "project": {"type": "string", "description": "Optional project name filter"},
+                                    "max_depth": {"type": "integer", "default": 5, "description": "Max traversal depth (hops)"}},
+                     "required": ["target"]}},
+    {"name": "code_index",
+     "description": "Scan and index repository code structure, symbols, imports, and calls into zero-dependency SQLite code graph.",
+     "inputSchema": {"type": "object",
+                     "properties": {"path": {"type": "string", "default": ".", "description": "Repository or directory path to index"},
+                                    "project": {"type": "string", "description": "Optional project name override"},
+                                    "force": {"type": "boolean", "default": False, "description": "Force re-indexing ignoring file cache"}},
                      "required": []}},
 ]
 
@@ -287,6 +332,80 @@ def call_tool(name, args):
             parts.append(f"{res['commits_bootstrapped']} git commits")
         detail = f" ({', '.join(parts)})" if parts else ""
         return f"Bootstrapped {cnt} memories for project '{p}'{detail}."
+    if name == "memory_timeline":
+        try:
+            from agi_memory.layers.episodic_layer import EpisodicLayer
+        except ImportError:
+            from layers.episodic_layer import EpisodicLayer
+        ep = EpisodicLayer(project=project)
+        sid = args.get("session_id")
+        if sid:
+            sess = ep.get_session(sid)
+            if not sess:
+                return f"Session '{sid}' not found."
+            out = EpisodicLayer.format_timeline([sess])
+            if sess.get("events"):
+                out += "\n\n### Session Events\n"
+                for ev in sess["events"]:
+                    out += f"- [{ev['timestamp']}] ({ev['event_type']}): {ev['summary']}\n"
+            return out
+        sessions = ep.get_timeline(project=project, limit=limit)
+        return EpisodicLayer.format_timeline(sessions)
+    if name == "code_structure":
+        try:
+            from agi_memory.layers.code_layer import CodeLayer
+        except ImportError:
+            from layers.code_layer import CodeLayer
+        cl = CodeLayer(project=project)
+        target_path = args.get("path", ".") or "."
+        syms = cl.get_structure(target_path=target_path, project=project)
+        return CodeLayer.format_structure(syms)
+    if name == "code_callers":
+        try:
+            from agi_memory.layers.code_layer import CodeLayer
+        except ImportError:
+            from layers.code_layer import CodeLayer
+        cl = CodeLayer(project=project)
+        sym = str(args.get("symbol", "")).strip()
+        if not sym:
+            return "error: 'symbol' parameter is required"
+        depth = int(args.get("max_depth", 3) or 3)
+        callers = cl.get_callers(sym, project=project, max_depth=depth)
+        return CodeLayer.format_callers(callers, sym)
+    if name == "code_dependencies":
+        try:
+            from agi_memory.layers.code_layer import CodeLayer
+        except ImportError:
+            from layers.code_layer import CodeLayer
+        cl = CodeLayer(project=project)
+        sym = str(args.get("symbol", "")).strip()
+        if not sym:
+            return "error: 'symbol' parameter is required"
+        depth = int(args.get("max_depth", 3) or 3)
+        deps = cl.get_dependencies(sym, project=project, max_depth=depth)
+        return CodeLayer.format_dependencies(deps, sym)
+    if name == "code_impact":
+        try:
+            from agi_memory.layers.code_layer import CodeLayer
+        except ImportError:
+            from layers.code_layer import CodeLayer
+        cl = CodeLayer(project=project)
+        target = str(args.get("target", "")).strip()
+        if not target:
+            return "error: 'target' parameter is required"
+        depth = int(args.get("max_depth", 5) or 5)
+        impact = cl.get_impact(target, project=project, max_depth=depth)
+        return CodeLayer.format_impact(impact)
+    if name == "code_index":
+        try:
+            from agi_memory.layers.code_layer import CodeLayer
+        except ImportError:
+            from layers.code_layer import CodeLayer
+        cl = CodeLayer(project=project)
+        p = str(args.get("path", ".") or ".")
+        force = bool(args.get("force", False))
+        res = cl.index_directory(p, project=project, force=force)
+        return f"Indexed {res['files_indexed']} new/modified files ({res['files_cached']} cached) for project '{res['project']}': {res['total_symbols']} symbols, {res['total_edges']} edges in {res['elapsed_ms']}ms."
     raise ValueError(f"unknown tool {name}")
 
 
@@ -491,6 +610,71 @@ def cmd_recall(argv: list[str]) -> None:
     print(res)
 
 
+def cmd_timeline(argv: list[str]) -> None:
+    import argparse
+    parser = argparse.ArgumentParser(prog="agi-memory timeline", description="Show episodic session history")
+    parser.add_argument("--project", "-p", default=None, help="Project filter")
+    parser.add_argument("--limit", "-n", type=int, default=5, help="Number of sessions")
+    parser.add_argument("--session", "-s", default=None, help="Session ID to inspect")
+    args = parser.parse_args(argv)
+    res = call_tool("memory_timeline", {"project": args.project, "limit": args.limit, "session_id": args.session})
+    print(res)
+
+
+def cmd_structure(argv: list[str]) -> None:
+    import argparse
+    parser = argparse.ArgumentParser(prog="agi-memory structure", description="Outline code structure & symbols")
+    parser.add_argument("path", nargs="?", default=".", help="File or directory path")
+    parser.add_argument("--project", "-p", default=None, help="Project filter")
+    args = parser.parse_args(argv)
+    res = call_tool("code_structure", {"path": args.path, "project": args.project})
+    print(res)
+
+
+def cmd_callers(argv: list[str]) -> None:
+    import argparse
+    parser = argparse.ArgumentParser(prog="agi-memory callers", description="Find inbound callers & references")
+    parser.add_argument("symbol", help="Target symbol or function name")
+    parser.add_argument("--project", "-p", default=None, help="Project filter")
+    parser.add_argument("--depth", "-d", type=int, default=3, help="Max recursion depth")
+    args = parser.parse_args(argv)
+    res = call_tool("code_callers", {"symbol": args.symbol, "project": args.project, "max_depth": args.depth})
+    print(res)
+
+
+def cmd_dependencies(argv: list[str]) -> None:
+    import argparse
+    parser = argparse.ArgumentParser(prog="agi-memory dependencies", description="Find outbound dependencies & calls")
+    parser.add_argument("symbol", help="Target symbol or module name")
+    parser.add_argument("--project", "-p", default=None, help="Project filter")
+    parser.add_argument("--depth", "-d", type=int, default=3, help="Max recursion depth")
+    args = parser.parse_args(argv)
+    res = call_tool("code_dependencies", {"symbol": args.symbol, "project": args.project, "max_depth": args.depth})
+    print(res)
+
+
+def cmd_impact(argv: list[str]) -> None:
+    import argparse
+    parser = argparse.ArgumentParser(prog="agi-memory impact", description="Calculate transitive blast radius")
+    parser.add_argument("target", help="Target symbol or file path to analyze")
+    parser.add_argument("--project", "-p", default=None, help="Project filter")
+    parser.add_argument("--depth", "-d", type=int, default=5, help="Max recursion depth")
+    args = parser.parse_args(argv)
+    res = call_tool("code_impact", {"target": args.target, "project": args.project, "max_depth": args.depth})
+    print(res)
+
+
+def cmd_index(argv: list[str]) -> None:
+    import argparse
+    parser = argparse.ArgumentParser(prog="agi-memory index", description="Index repository into structural code graph")
+    parser.add_argument("path", nargs="?", default=".", help="Directory to index")
+    parser.add_argument("--project", "-p", default=None, help="Project override")
+    parser.add_argument("--force", action="store_true", help="Force re-indexing without cache")
+    args = parser.parse_args(argv)
+    res = call_tool("code_index", {"path": args.path, "project": args.project, "force": args.force})
+    print(res)
+
+
 def main(argv: list[str] | None = None) -> None:
     if argv is None:
         argv = sys.argv[1:]
@@ -558,14 +742,38 @@ def main(argv: list[str] | None = None) -> None:
         elif cmd == "recall":
             cmd_recall(argv[1:])
             return
+        elif cmd == "timeline":
+            cmd_timeline(argv[1:])
+            return
+        elif cmd == "structure":
+            cmd_structure(argv[1:])
+            return
+        elif cmd == "callers":
+            cmd_callers(argv[1:])
+            return
+        elif cmd == "dependencies":
+            cmd_dependencies(argv[1:])
+            return
+        elif cmd == "impact":
+            cmd_impact(argv[1:])
+            return
+        elif cmd == "index":
+            cmd_index(argv[1:])
+            return
         elif cmd in ("-v", "--version", "version"):
             print(f"agi-memory {__version__}")
             return
         elif cmd in ("-h", "--help", "help"):
-            print("agi-memory: Zero-dependency two-layer AI memory framework with MCP server.\n")
+            print("agi-memory: Zero-dependency four-pillar cognitive memory framework with MCP server.\n")
             print("Usage:")
             print("  agi-memory                           Start MCP stdio server")
             print("  agi-memory bootstrap [--repo .]      Bootstrap initial memories from Git & README")
+            print("  agi-memory timeline [--limit 5]      Inspect past session timelines and recaps")
+            print("  agi-memory structure [path]          Show hierarchical symbol structure")
+            print("  agi-memory callers <symbol>          Find inbound callers & references across codebase")
+            print("  agi-memory dependencies <symbol>     Find outbound dependencies & calls")
+            print("  agi-memory impact <target>           Calculate blast radius impact analysis")
+            print("  agi-memory index [path]              Index repository into structural code graph")
             print("  agi-memory log [--limit 20]          List recent observations")
             print("  agi-memory inspect <id>              Inspect observation details and facts")
             print("  agi-memory delete <id> [--hard]      Delete/supersede an observation")

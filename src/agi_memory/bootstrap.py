@@ -238,6 +238,19 @@ def bootstrap_project(repo_dir: str | Path = ".", max_commits: int = 20,
             commits_bootstrapped += 1
             existing_titles.add(full_title.lower())
 
+    # 3. Seed Structural Code Graph
+    code_indexed = 0
+    try:
+        try:
+            from agi_memory.layers.code_layer import CodeLayer
+        except ImportError:
+            from layers.code_layer import CodeLayer
+        cl = CodeLayer(db_path=db_path, project=proj)
+        code_res = cl.index_directory(repo_path, project=proj)
+        code_indexed = code_res.get("files_indexed", 0) + code_res.get("files_cached", 0)
+    except Exception:
+        pass
+
     return {
         "project": proj,
         "repo_dir": str(repo_path),
@@ -245,6 +258,7 @@ def bootstrap_project(repo_dir: str | Path = ".", max_commits: int = 20,
         "ids": created_ids,
         "readme_bootstrapped": readme_bootstrapped,
         "commits_bootstrapped": commits_bootstrapped,
+        "code_files_indexed": code_indexed,
     }
 
 

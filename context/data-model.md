@@ -75,6 +75,42 @@ Stores non-negotiable architectural rules and guidelines injected unconditionall
 - `created_at`: TEXT DEFAULT CURRENT_TIMESTAMP
 - `updated_at`: TEXT DEFAULT CURRENT_TIMESTAMP
 
+### `episodic_sessions` & `episodic_events` Tables (L3 Episodic Memory)
+Tracks agent session lifecycles, duration, touched files, events, and git commit deltas.
+- **`episodic_sessions`**:
+  - `session_id`: TEXT PRIMARY KEY
+  - `project`: TEXT NOT NULL (indexed)
+  - `agent_name`: TEXT DEFAULT 'assistant'
+  - `started_at`: TEXT NOT NULL
+  - `ended_at`: TEXT
+  - `duration_seconds`: REAL
+  - `status`: TEXT DEFAULT 'active' (`active`, `completed`, `aborted`)
+  - `goal`: TEXT
+  - `summary`: TEXT
+  - `git_branch`: TEXT
+  - `git_commit_start`: TEXT
+  - `git_commit_end`: TEXT
+  - `touched_files`: TEXT DEFAULT '[]' (JSON array of relative paths)
+  - `metadata`: TEXT DEFAULT '{}'
+- **`episodic_events`**:
+  - `id`: INTEGER PRIMARY KEY AUTOINCREMENT
+  - `session_id`: TEXT NOT NULL (indexed)
+  - `event_type`: TEXT NOT NULL (`decision`, `commit`, `file_edit`, `bugfix`, `milestone`)
+  - `summary`: TEXT NOT NULL
+  - `details`: TEXT DEFAULT '{}'
+  - `created_at`: TEXT NOT NULL
+
+### `code_files`, `code_symbols`, and `code_edges` (L4 Structural Code Graph)
+Zero-dependency AST and streaming regex symbol index and dependency graph.
+- **`code_files`**:
+  - `project`: TEXT, `file_path`: TEXT, `language`: TEXT, `sha256`: TEXT, `indexed_at`: TEXT, `symbol_count`: INTEGER
+  - `UNIQUE(project, file_path)`
+- **`code_symbols`** (with FTS5 `code_symbols_fts`):
+  - `project`: TEXT, `file_path`: TEXT, `symbol_name`: TEXT, `symbol_type`: TEXT (`class`, `function`, `method`, `interface`, `type`), `start_line`: INTEGER, `end_line`: INTEGER, `parent_symbol`: TEXT, `signature`: TEXT, `docstring`: TEXT
+- **`code_edges`**:
+  - `project`: TEXT, `source_symbol`: TEXT, `target_symbol`: TEXT, `relation`: TEXT (`CALLS`, `INHERITS`, `IMPORTS`, `CONTAINS`), `file_path`: TEXT, `line_number`: INTEGER
+  - `UNIQUE(project, source_symbol, target_symbol, relation, file_path, line_number)`
+
 ---
 
 ## 2. Canonical Git Vault Format (`~/.agent-memory/vault/`)

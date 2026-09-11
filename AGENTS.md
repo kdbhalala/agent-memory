@@ -1,29 +1,34 @@
 # agi-memory - AI Assistant Workspace Guide
 
-Turnkey zero-dependency two-layer memory architecture (SQLite FTS5 + Recursive Knowledge Graph) with MCP server for Claude Code, Cursor, Codex, OpenCode, Antigravity, and all major coding assistants.
+Turnkey zero-dependency four-pillar cognitive memory framework (Epistemic, Semantic, Episodic, Structural Code Graph) with MCP server for Claude Code, Cursor, Codex, OpenCode, Antigravity, and all major coding assistants.
 
-## Memory Discipline (agi-memory MCP)
+## Memory & Code Graph Discipline (agi-memory MCP)
 
-This repository implements the two-layer memory architecture (SessionLayer L1 + GraphLayer L2).
+This repository implements the four cognitive memory pillars (Epistemic L1 + Semantic L2 + Episodic L3 + Structural Code L4).
 When operating in this codebase:
 1. Call `memory_recall(query, project="agi-memory")` to check past decisions and bugfixes before modifying code.
 2. Call `memory_recall_deep(query, project="agi-memory")` when architectural or cross-project context is needed.
-3. Call `memory_record(text, title, project="agi-memory", category="...", supersedes="...", relations=[...])` when establishing conventions or resolving non-trivial issues.
-4. Pin non-negotiable invariants using `memory_pin(key, content, category="architecture", project="agi-memory")`.
-5. Call `memory_bootstrap(repo=".")` when operating in a newly attached workspace to seed cold-start architectural memory.
+3. Call `memory_timeline(project="agi-memory")` to check what was accomplished in prior sessions and review touched files.
+4. Call `code_callers(symbol)` and `code_impact(target)` before refactoring or deleting symbols to inspect blast radius.
+5. Call `code_structure(path)` to inspect class and function hierarchies in modules.
+6. Call `memory_record(text, title, project="agi-memory", category="...", supersedes="...", relations=[...])` when establishing conventions or resolving non-trivial issues.
+7. Pin non-negotiable invariants using `memory_pin(key, content, category="architecture", project="agi-memory")`.
+8. Call `memory_bootstrap(repo=".")` when operating in a newly attached workspace to seed cold-start architectural memory and code graph.
 
 ## Project Structure & Navigation
 
 - `src/agi_memory/`: Standard Python package root containing all core modules:
   - `config.py`: Single Source of Truth (SSoT) for paths, directories, and environment variable resolution.
-  - `layers/session_layer.py`: L1 Working Memory (SQLite FTS5 with BM25 ranking, <2ms), Core Memory blocks, and inspection/deletion APIs.
-  - `layers/graph_layer.py`: L2 Knowledge Graph (SQLite recursive CTEs, <0.5ms), Bi-Temporal Edges & Entity Aliases.
+  - `layers/session_layer.py`: L1 Epistemic Working Memory (SQLite FTS5 with BM25 ranking, <2ms), Core Memory blocks, and inspection/deletion APIs.
+  - `layers/graph_layer.py`: L2 Semantic Knowledge Graph (SQLite recursive CTEs, <0.5ms), Bi-Temporal Edges & Entity Aliases.
+  - `layers/episodic_layer.py`: L3 Episodic Session History (session timelines, touched files, commit deltas, cross-session recaps).
+  - `layers/code_layer.py`: L4 Structural Code Graph (Python stdlib AST & regex parser, callers, dependencies, blast-radius impact analysis).
   - `vault.py`: Canonical Git-friendly append-only JSONL vault (`~/.agi-memory/vault/`) & deduplication engine.
   - `sync.py`: Background Git/GitHub sync & `gh` CLI automation.
-  - `hooks.py`: Universal lifecycle hooks dispatcher (`session-start`, `pre-compact`, `session-end`, `pre-commit`).
+  - `hooks.py`: Universal lifecycle hooks dispatcher (`session-start`, `pre-compact`, `session-end`, `pre-commit`, `post-commit`).
   - `promote.py`: Automated high-signal batch prompter L1 -> L2 (`--auto`).
   - `bootstrap.py`: Zero-touch cold-start memory seeder from Git history & README (`agi-memory bootstrap`).
-  - `mcp_server.py`: Model Context Protocol server exposing 9 tools (`memory_recall`, `memory_recall_deep`, `memory_record`, `memory_promote`, `memory_sync`, `memory_pin`, `memory_unpin`, `memory_blocks`, `memory_bootstrap`) and developer observability CLI (`log`, `inspect`, `delete`, `pin`, `unpin`, `blocks`, `bootstrap`).
+  - `mcp_server.py`: Model Context Protocol server exposing 15 tools (`memory_recall`, `memory_recall_deep`, `memory_record`, `memory_promote`, `memory_sync`, `memory_pin`, `memory_unpin`, `memory_blocks`, `memory_bootstrap`, `memory_timeline`, `code_structure`, `code_callers`, `code_dependencies`, `code_impact`, `code_index`) and developer observability CLI.
   - `integrate.py`: Automated multi-assistant installer, cold-start seeder (`agi-integrate bootstrap`), hook integrator (`agi-integrate hooks`), and project scaffolder.
 - `Formula/agi-memory.rb`: Official Homebrew formula (`brew tap kdbhalala/agi-memory https://github.com/kdbhalala/agi-memory && brew install agi-memory`).
 

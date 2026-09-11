@@ -2,9 +2,11 @@
 
 Turnkey cross-agent memory integration for leading AI coding CLIs and IDEs.
 
-`agent-memory` exposes a unified Model Context Protocol (MCP) server that connects your AI coding assistants to a shared two-layer memory backend:
-- **L1 Working Memory (`SessionLayer`)**: Rapid, zero-token session working memory (<2ms via SQLite FTS5). Captures recent decisions, bugfixes, tool executions, and file-level constraints.
-- **L2 Knowledge Graph (`GraphLayer`)**: Native SQLite knowledge graph with multi-hop recursive traversal (<0.35ms) for architectural principles, long-term trade-offs, and cross-project rules.
+`agent-memory` exposes a unified Model Context Protocol (MCP) server that connects your AI coding assistants to a turnkey, zero-dependency four-pillar cognitive memory framework:
+- **L1 Epistemic Working Memory (`SessionLayer`)**: Rapid, zero-token session working memory (<2ms via SQLite FTS5). Captures recent decisions, bugfixes, tool executions, and file-level constraints.
+- **L2 Semantic Knowledge Graph (`GraphLayer`)**: Native SQLite knowledge graph with multi-hop recursive traversal (<0.35ms) for architectural principles, long-term trade-offs, and cross-project rules.
+- **L3 Episodic Session History (`EpisodicLayer`)**: Session lifecycle tracking, timelines, touched files, commit deltas, and cross-session recaps.
+- **L4 Structural Code Graph (`CodeLayer`)**: Zero-dependency AST & regex codebase graph with recursive callers, dependencies, and blast-radius impact analysis.
 
 All tools share the same memory: an architectural pattern recorded in Claude Code is instantly recallable in Cursor, Codex, OpenCode, Antigravity, or Aider.
 
@@ -68,39 +70,43 @@ Pi                     ✓          ✓ Yes        ✓ Yes      ~/.pi/agent/mcp.
 ### 2. Install to All Detected Tools
 Wire the MCP server and memory discipline rules across all detected tools in one command:
 ```bash
-python integrate.py install all
+agi-integrate install all
 ```
 Or target specific tools:
 ```bash
-python integrate.py install claude cursor codex
+agi-integrate install claude cursor codex
 ```
 
 ### 3. Verify MCP Server Handshake
 Run the automated stdio protocol verification:
 ```bash
-python integrate.py test
+agi-integrate test
 ```
-Verifies `initialize`, `ping`, and tools registration (`memory_recall`, `memory_recall_deep`, `memory_record`, `memory_promote`, `memory_sync`, `memory_pin`, `memory_unpin`, `memory_blocks`, `memory_bootstrap`).
-
----
+Verifies `initialize`, `ping`, and tools registration across all 15 native tools.
 
 ---
 
 ## The Standard MCP Tools
 
-Every integrated tool gains access to 9 native tools:
+Every integrated tool gains access to 15 native tools across the four cognitive pillars:
 
-| MCP Tool | Primary Use | Example Query / Action |
-|---|---|---|
-| `memory_recall` | Fast L1 working memory search | `{"query": "auth migration", "project": "my-app"}` |
-| `memory_recall_deep` | Deep L1 + L2 knowledge graph search | `{"query": "state management architecture"}` |
-| `memory_record` | In-flight curation, graph synthesis & conflict steering | `{"text": "Use SQLite FTS5", "title": "DB Arch", "category": "architecture", "supersedes": "#101", "relations": [{"source": "App", "relation": "USES", "target": "SQLite"}]}` |
-| `memory_promote` | Curate session learnings into L2 Knowledge Graph | `{"project": "my-app", "limit": 20}` |
-| `memory_sync` | Synchronize vault with Git/GitHub & run compaction | `{"action": "sync"}` / `{"action": "dedupe"}` |
-| `memory_pin` | Pin mission-critical invariants to Core Memory | `{"key": "zero_pip_deps", "content": "Zero external pip dependencies"}` |
-| `memory_unpin` | Unpin an invariant from Core Memory | `{"key": "zero_pip_deps"}` |
-| `memory_blocks` | List active Core Memory blocks | `{"project": "agent-memory"}` |
-| `memory_bootstrap` | Seed initial memories from Git history & README | `{"repo": ".", "project": "my-app"}` |
+| Cognitive Pillar | MCP Tool | Primary Use | Example Query / Action |
+|---|---|---|---|
+| **Epistemic** | `memory_recall` | Fast L1 working memory search | `{"query": "auth migration", "project": "my-app"}` |
+| **Epistemic** | `memory_record` | In-flight curation & conflict steering | `{"text": "Use SQLite FTS5", "title": "DB Arch", "category": "architecture", "supersedes": "#101"}` |
+| **Epistemic** | `memory_pin` | Pin invariants to Core Memory | `{"key": "zero_pip_deps", "content": "Zero external pip dependencies"}` |
+| **Epistemic** | `memory_unpin` | Unpin an invariant from Core Memory | `{"key": "zero_pip_deps"}` |
+| **Epistemic** | `memory_blocks` | List active Core Memory blocks | `{"project": "agent-memory"}` |
+| **Epistemic** | `memory_bootstrap`| Seed memories from Git & README | `{"repo": ".", "project": "my-app"}` |
+| **Semantic** | `memory_recall_deep` | Deep L1 + L2 knowledge graph search | `{"query": "state management architecture"}` |
+| **Semantic** | `memory_promote` | Curate session learnings into L2 Graph | `{"project": "my-app", "limit": 20}` |
+| **Episodic** | `memory_timeline` | Past session timeline & recaps | `{"project": "my-app", "limit": 5}` |
+| **Episodic** | `memory_sync` | Synchronize vault with Git/compaction | `{"action": "sync"}` / `{"action": "dedupe"}` |
+| **Structural Code** | `code_structure` | Hierarchical symbol tree | `{"path": "src/services", "project": "my-app"}` |
+| **Structural Code** | `code_callers` | Inbound callers & references via CTE | `{"symbol": "get_default_db", "max_depth": 3}` |
+| **Structural Code** | `code_dependencies`| Outbound dependencies & calls via CTE | `{"symbol": "AuthService", "max_depth": 3}` |
+| **Structural Code** | `code_impact` | Blast-radius transitive impact analysis | `{"target": "config.py", "max_depth": 5}` |
+| **Structural Code** | `code_index` | Index codebase into code graph | `{"path": ".", "force": false}` |
 
 ---
 

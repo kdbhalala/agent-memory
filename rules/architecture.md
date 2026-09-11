@@ -8,12 +8,14 @@
 
 2. **Strict Layer Separation & Event-Driven Decoupling**:
    - **Configuration SSoT** ([`config.py`](../config.py)): Centralized path resolution and environment variable defaults.
-   - **L1 Working Memory** ([`layers/session_layer.py`](../layers/session_layer.py)): Fast SQLite FTS5 with BM25 ranking (<2ms), decoupled via record event listeners.
-   - **L2 Knowledge Graph** ([`layers/graph_layer.py`](../layers/graph_layer.py)): SQLite recursive Common Table Expressions (`WITH RECURSIVE`) for multi-hop graph traversal (<0.5ms), decoupled via edge event listeners.
-    - **Vault Storage & Compaction** ([`vault.py`](../vault.py)): Canonical append-only JSONL files in `~/.agent-memory/vault/`.
-    - **Git Sync Engine** ([`sync.py`](../sync.py)): Automatic background push/pull to private GitHub repository.
-    - **Cold-Start Seeder** ([`bootstrap.py`](../bootstrap.py)): Zero-touch memory bootstrapping from Git history and `README.md`.
-    - **Developer Observability & MCP Server** ([`mcp_server.py`](../mcp_server.py)): Dispatches 9 native MCP tools and CLI curation commands (`log`, `inspect`, `delete`, `pin`, `unpin`, `blocks`, `bootstrap`).
+   - **L1 Epistemic Working Memory** ([`layers/session_layer.py`](../layers/session_layer.py)): Fast SQLite FTS5 with BM25 ranking (<2ms), decoupled via record event listeners.
+   - **L2 Semantic Knowledge Graph** ([`layers/graph_layer.py`](../layers/graph_layer.py)): SQLite recursive Common Table Expressions (`WITH RECURSIVE`) for multi-hop graph traversal (<0.5ms), decoupled via edge event listeners.
+   - **L3 Episodic Session History** ([`layers/episodic_layer.py`](../layers/episodic_layer.py)): Session lifecycles, event logs, commit tracking, and cross-session startup recaps (<0.25ms).
+   - **L4 Structural Code Graph** ([`layers/code_layer.py`](../layers/code_layer.py)): Python stdlib AST + streaming regex graph parser, callers, dependencies, and blast-radius impact analysis (<0.5ms).
+   - **Vault Storage & Compaction** ([`vault.py`](../vault.py)): Canonical append-only JSONL files in `~/.agent-memory/vault/`.
+   - **Git Sync Engine** ([`sync.py`](../sync.py)): Automatic background push/pull to private GitHub repository.
+   - **Cold-Start Seeder** ([`bootstrap.py`](../bootstrap.py)): Zero-touch memory bootstrapping from Git history, `README.md`, and code symbols.
+   - **Developer Observability & MCP Server** ([`mcp_server.py`](../mcp_server.py)): Dispatches 15 native MCP tools and CLI curation commands (`log`, `inspect`, `delete`, `pin`, `unpin`, `blocks`, `timeline`, `structure`, `callers`, `dependencies`, `impact`, `index`, `bootstrap`).
 
 3. **Code vs Data Decoupling**:
    - The code repository must never store runtime databases (`*.db`, `*.sqlite`), user state (`promoted.json`), or secrets.

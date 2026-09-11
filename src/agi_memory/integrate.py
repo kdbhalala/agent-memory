@@ -1173,7 +1173,8 @@ def cmd_test(args: argparse.Namespace) -> None:
         expected_tools = [
             "memory_recall", "memory_recall_deep", "memory_record",
             "memory_promote", "memory_sync", "memory_pin", "memory_unpin", "memory_blocks",
-            "memory_bootstrap"
+            "memory_bootstrap", "memory_timeline", "code_structure", "code_callers",
+            "code_dependencies", "code_impact", "code_index"
         ]
         for exp in expected_tools:
             if exp in tools:

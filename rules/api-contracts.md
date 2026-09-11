@@ -70,25 +70,77 @@ Lists all active or historical Core Memory blocks.
 - **Returns**: Formatted list of Core Memory blocks.
 
 ### 9. `memory_bootstrap`
-Bootstraps initial architectural memories from local Git commit history and repository README.md.
+Bootstraps initial architectural memories from local Git commit history, repository README.md, and structural code graph.
 - **Parameters**:
   - `repo` (string, default: `"."`): Path to repository root.
   - `project` (string, optional): Target project name.
   - `max_commits` (integer, default: 20): Maximum high-signal git commits to parse.
-- **Returns**: Summary string with count of bootstrapped memories.
+- **Returns**: Summary string with count of bootstrapped memories and indexed symbols.
+
+### 10. `memory_timeline`
+Episodic memory timeline: retrieves recent agent session history, touched files, and commit deltas.
+- **Parameters**:
+  - `project` (string, optional): Project filter.
+  - `limit` (integer, default: 10): Maximum sessions to retrieve.
+  - `session_id` (string, optional): Specific session ID to inspect in detail.
+- **Returns**: Formatted session timeline and summaries.
+
+### 11. `code_structure`
+Structural code graph outline: lists classes, functions, methods, imports, and exports for a file or directory.
+- **Parameters**:
+  - `path` (string, required): File or directory path to inspect.
+  - `project` (string, optional): Project name.
+- **Returns**: Hierarchical symbol structure and line ranges.
+
+### 12. `code_callers`
+Inbound call graph traversal: finds callers and inbound references to a function, method, or class.
+- **Parameters**:
+  - `symbol` (string, required): Function, method, or class name to find callers for.
+  - `project` (string, optional): Project name.
+  - `max_depth` (integer, default: 3): Maximum recursive call graph traversal depth.
+- **Returns**: Ranked inbound caller hierarchy and call sites.
+
+### 13. `code_dependencies`
+Outbound dependency graph: finds outbound function calls, class instantiations, and module imports.
+- **Parameters**:
+  - `symbol` (string, required): Symbol name to find outbound dependencies for.
+  - `project` (string, optional): Project name.
+  - `max_depth` (integer, default: 3): Maximum recursive dependency traversal depth.
+- **Returns**: Ranked outbound dependency paths.
+
+### 14. `code_impact`
+Blast-radius impact analysis: evaluates affected upstream symbols and files if a target symbol or file is changed or refactored.
+- **Parameters**:
+  - `target` (string, required): Target symbol or file path to analyze.
+  - `project` (string, optional): Project name.
+  - `max_depth` (integer, default: 3): Maximum traversal depth.
+- **Returns**: Risk level (LOW/MEDIUM/HIGH), impacted file and symbol counts, and upstream dependency paths.
+
+### 15. `code_index`
+Indexes a file or directory into the structural code graph (AST + streaming regex parser with incremental sha256 cache).
+- **Parameters**:
+  - `path` (string, default: `"."`): File or directory path to index.
+  - `project` (string, optional): Project name.
+- **Returns**: Number of indexed files, discovered symbols, and edges.
 
 ## Developer Observability & Curation CLI
 
 Direct command-line interface for human developers to audit and curate memories without a SQLite shell:
 
-- `agent-memory log [--limit 20] [--project PROJ] [--all]`: List recent observations in a tabular format.
-- `agent-memory inspect <id>`: View full details, facts, narrative, and concepts of observation #`<id>`.
-- `agent-memory delete <id> [--hard]`: Soft-delete (mark superseded) or permanently purge an observation.
-- `agent-memory bootstrap [--repo .] [--max-commits 20]`: Seed initial memories from Git history and README.
-- `agent-memory recall <query> [--project PROJ] [--deep]`: Test working and durable memory search.
-- `agent-memory pin <key> <content> [--category CAT] [--project PROJ]`: Pin critical rule to core memory.
-- `agent-memory unpin <key>`: Unpin a block from core memory.
-- `agent-memory blocks [--project PROJ]`: List pinned core memory blocks.
+- `agi-memory log [--limit 20] [--project PROJ] [--all]`: List recent observations in a tabular format.
+- `agi-memory inspect <id>`: View full details, facts, narrative, and concepts of observation #`<id>`.
+- `agi-memory delete <id> [--hard]`: Soft-delete (mark superseded) or permanently purge an observation.
+- `agi-memory timeline [-n 10] [--project PROJ]`: View episodic session timeline and recaps.
+- `agi-memory structure <path> [--project PROJ]`: View symbol outline for a file or directory.
+- `agi-memory callers <symbol> [--project PROJ]`: Find all inbound callers of a function or class.
+- `agi-memory dependencies <symbol> [--project PROJ]`: Find all outbound dependencies.
+- `agi-memory impact <target> [--project PROJ]`: Analyze blast-radius impact of refactoring a symbol.
+- `agi-memory index [path] [--project PROJ]`: Incrementally index source files into the code graph.
+- `agi-memory bootstrap [--repo .] [--max-commits 20]`: Seed initial memories from Git history, README & code symbols.
+- `agi-memory recall <query> [--project PROJ] [--deep]`: Test working and durable memory search.
+- `agi-memory pin <key> <content> [--category CAT] [--project PROJ]`: Pin critical rule to core memory.
+- `agi-memory unpin <key>`: Unpin a block from core memory.
+- `agi-memory blocks [--project PROJ]`: List pinned core memory blocks.
 
 ## Lifecycle Hooks & Automation CLI
 

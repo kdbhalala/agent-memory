@@ -798,6 +798,201 @@ with tempfile.TemporaryDirectory() as boot_tmp:
     mcp_server.cmd_unpin(["test_invariant"])
     mcp_server.cmd_delete([str(first_id)])
 
+    # ========================================================================
+    # EpisodicLayer (L3: Session Lifecycle, Timelines, Touched Files) Tests
+    # ========================================================================
+    from agi_memory.layers.episodic_layer import EpisodicLayer
+    ep_db = t_path / "test_episodic.db"
+    os.environ["AGI_MEMORY_DB"] = str(ep_db)
+    ep = EpisodicLayer(db_path=ep_db, project="sample-agent-app")
+
+    # 1. Start session
+    s1 = ep.start_session(goal="Build zero-dependency code graph", branch="feature-cg", head="a1b2c3d")
+    assert s1["session_id"].startswith("sess_")
+    assert s1["project"] == "sample-agent-app"
+    assert s1["status"] == "active"
+    sid = s1["session_id"]
+
+    # 2. Record events
+    ep.record_event(sid, "edit", "Edited code_layer.py", details="src/agi_memory/layers/code_layer.py")
+    ep.record_event(sid, "commit", "Commit e4f5g6h: add AST parser", details={"hash": "e4f5g6h"})
+
+    # 3. End session
+    ended = ep.end_session(sid, summary="Successfully completed code graph implementation", cwd=t_path)
+    assert ended is not None
+    assert ended["status"] == "completed"
+    assert ended["duration_seconds"] >= 1.0
+    assert "src/agi_memory/layers/code_layer.py" in ended["touched_files"]
+    assert "e4f5g6h" in ended["commits"]
+
+    # 4. Timeline & Recap
+    timeline = ep.get_timeline(project="sample-agent-app", limit=5)
+    assert len(timeline) == 1
+    assert timeline[0]["session_id"] == sid
+
+    last_s = ep.get_last_session(project="sample-agent-app")
+    assert last_s is not None
+    assert last_s["session_id"] == sid
+
+    recap_str = EpisodicLayer.format_recap(last_s)
+    assert "Build zero-dependency code graph" in recap_str
+    assert "code_layer.py" in recap_str
+
+    tl_str = EpisodicLayer.format_timeline(timeline)
+    assert sid in tl_str
+
+    # 5. Search episodic
+    ep_hits = ep.search("code graph", limit=5)
+    assert len(ep_hits) == 1
+    assert ep_hits[0].ref == sid
+
+    # 6. MCP & CLI for episodic
+    mcp_tl_out = mcp_server.call_tool("memory_timeline", {"project": "sample-agent-app"})
+    assert sid in mcp_tl_out
+    mcp_sess_out = mcp_server.call_tool("memory_timeline", {"project": "sample-agent-app", "session_id": sid})
+    assert "Session Events" in mcp_sess_out
+    mcp_server.cmd_timeline(["--project", "sample-agent-app", "--limit", "3"])
+
+    # ========================================================================
+    # CodeLayer (L4: Structural Code Graph, AST, Callers, Impact) Tests
+    # ========================================================================
+    from agi_memory.layers.code_layer import CodeLayer, parse_source_code
+    code_db = t_path / "test_code.db"
+    os.environ["AGI_MEMORY_DB"] = str(code_db)
+    cl = CodeLayer(db_path=code_db, project="sample-agent-app")
+
+    # Test Python AST parser
+    py_code = '''
+"""Sample module for AST testing."""
+import os
+from math import sqrt
+
+class BaseService:
+    def execute(self) -> bool:
+        return True
+
+class AuthService(BaseService):
+    """Handles authentication logic."""
+    def __init__(self, secret: str):
+        self.secret = secret
+
+    def authenticate(self, token: str) -> bool:
+        return self.verify_token(token)
+
+    def verify_token(self, token: str) -> bool:
+        return len(token) > 5
+'''
+    py_syms, py_edges = parse_source_code(py_code, "auth_service.py", "python")
+    sym_names = {s["name"] for s in py_syms}
+    assert "BaseService" in sym_names
+    assert "AuthService" in sym_names
+    assert "authenticate" in sym_names
+    assert "verify_token" in sym_names
+    # Check inheritance edge
+    extends_edges = [e for e in py_edges if e["relation"] == "EXTENDS"]
+    assert any(e["source"] == "AuthService" and e["target"] == "BaseService" for e in extends_edges)
+    # Check call edge
+    call_edges = [e for e in py_edges if e["relation"] == "CALLS"]
+    assert any(e["source"] == "AuthService.authenticate" and e["target"] == "verify_token" for e in call_edges)
+
+    # Test JS/TS parser
+    ts_code = '''
+import { apiClient } from './api';
+
+export interface User {
+    id: string;
+    name: string;
+}
+
+export class UserService extends BaseService {
+    async getUser(id: string): Promise<User> {
+        return apiClient.fetch(id);
+    }
+}
+'''
+    ts_syms, ts_edges = parse_source_code(ts_code, "user_service.ts", "typescript")
+    ts_names = {s["name"] for s in ts_syms}
+    assert "User" in ts_names
+    assert "UserService" in ts_names
+
+    # Test Go parser
+    go_code = '''
+package main
+import "fmt"
+
+type Server struct {
+    port int
+}
+
+func (s *Server) Start() {
+    fmt.Println(s.port)
+}
+'''
+    go_syms, go_edges = parse_source_code(go_code, "server.go", "go")
+    go_names = {s["name"] for s in go_syms}
+    assert "Server" in go_names
+    assert "Start" in go_names
+
+    # Index Python file into CodeLayer
+    idx_res = cl.index_file("auth_service.py", project="sample-agent-app", content=py_code, root_dir=t_path)
+    assert idx_res["symbols_indexed"] >= 4
+    assert idx_res["cached"] is False
+
+    # Verify cached indexing
+    idx_res_cached = cl.index_file("auth_service.py", project="sample-agent-app", content=py_code, root_dir=t_path)
+    assert idx_res_cached["cached"] is True
+
+    # Test symbol search
+    found_syms = cl.search_symbols("AuthService", project="sample-agent-app")
+    assert len(found_syms) >= 1
+    assert any(s["name"] == "AuthService" for s in found_syms)
+
+    # Test structure
+    struct = cl.get_structure("auth_service.py", project="sample-agent-app")
+    assert len(struct) >= 4
+    struct_txt = CodeLayer.format_structure(struct)
+    assert "AuthService" in struct_txt
+
+    # Test callers (AuthService.authenticate calls verify_token)
+    callers = cl.get_callers("verify_token", project="sample-agent-app")
+    assert len(callers) >= 1
+    assert any("authenticate" in c["caller"] for c in callers)
+    callers_txt = CodeLayer.format_callers(callers, "verify_token")
+    assert "authenticate" in callers_txt
+
+    # Test impact blast radius
+    impact = cl.get_impact("verify_token", project="sample-agent-app")
+    assert impact["impacted_symbol_count"] >= 1
+    assert "AuthService.authenticate" in impact["impacted_symbols"]
+
+    # Test directory indexing on src/agi_memory
+    dir_res = cl.index_directory("src/agi_memory", project="sample-agent-app")
+    assert dir_res["files_scanned"] >= 10
+    assert dir_res["total_symbols"] >= 100
+
+    # Test MCP tools
+    tool_struct = mcp_server.call_tool("code_structure", {"path": "auth_service.py", "project": "sample-agent-app"})
+    assert "AuthService" in tool_struct
+
+    tool_callers = mcp_server.call_tool("code_callers", {"symbol": "verify_token", "project": "sample-agent-app"})
+    assert "authenticate" in tool_callers
+
+    tool_deps = mcp_server.call_tool("code_dependencies", {"symbol": "AuthService.authenticate", "project": "sample-agent-app"})
+    assert "verify_token" in tool_deps
+
+    tool_impact = mcp_server.call_tool("code_impact", {"target": "verify_token", "project": "sample-agent-app"})
+    assert "Blast Radius" in tool_impact
+
+    tool_index = mcp_server.call_tool("code_index", {"path": "src/agi_memory", "project": "sample-agent-app"})
+    assert "Indexed" in tool_index
+
+    # Test CLI commands
+    mcp_server.cmd_structure(["auth_service.py", "--project", "sample-agent-app"])
+    mcp_server.cmd_callers(["verify_token", "--project", "sample-agent-app"])
+    mcp_server.cmd_dependencies(["AuthService.authenticate", "--project", "sample-agent-app"])
+    mcp_server.cmd_impact(["verify_token", "--project", "sample-agent-app"])
+    mcp_server.cmd_index(["src/agi_memory", "--project", "sample-agent-app"])
+
 print("layers OK")
 print("integrate tests OK")
 print("graph tests OK")
@@ -810,3 +1005,5 @@ print("bi-temporal graph and canonicalization OK")
 print("lifecycle hooks OK")
 print("modularity & event listener decoupling OK")
 print("cold-start bootstrap & observability CLI OK")
+print("episodic session timeline & recaps OK")
+print("structural code graph AST & impact analysis OK")

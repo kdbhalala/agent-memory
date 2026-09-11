@@ -102,31 +102,46 @@ def ensure_hooks_dir() -> Path:
 # ============================================================================
 
 def hook_session_start(project: Optional[str] = None) -> None:
-    """SessionStart / PreInvocation: Inject pinned blocks and top precedents into context."""
+    """SessionStart / PreInvocation: Inject pinned blocks, precedents, and episodic recap into context."""
     proj = project or detect_project()
     sys.path.insert(0, str(REPO_DIR))
 
     pinned_blocks: List[Dict[str, Any]] = []
     recent_hits: List[str] = []
+    episodic_recap: str = ""
 
     try:
-        from agi_memory.layers.session_layer import SessionLayer
-    except ImportError:
-        from layers.session_layer import SessionLayer
-    try:
+        try:
+            from agi_memory.layers.session_layer import SessionLayer
+            from agi_memory.layers.episodic_layer import EpisodicLayer
+        except ImportError:
+            from layers.session_layer import SessionLayer
+            from layers.episodic_layer import EpisodicLayer
+
         l1 = SessionLayer(project=proj)
         pinned_blocks = l1.get_pinned_blocks(project=proj)
         hits = l1.search("architecture convention pattern decision rule invariant", limit=3)
         recent_hits = [h.text for h in hits]
+
+        ep = EpisodicLayer(project=proj)
+        last_session = ep.get_last_session(project=proj)
+        if last_session:
+            episodic_recap = EpisodicLayer.format_recap(last_session)
+        # Register new active session
+        ep.start_session(project=proj)
     except Exception:
         pass
 
-    if not pinned_blocks and not recent_hits:
+    if not pinned_blocks and not recent_hits and not episodic_recap:
         return
 
     output: List[str] = []
     output.append(f"<!-- AGENT_MEMORY_STARTUP_CONTEXT -->")
     output.append(f"# Agent Memory: Active Context & Precedents ({proj})")
+
+    if episodic_recap:
+        output.append("\n## Prior Session Briefing")
+        output.append(f"- {episodic_recap}")
 
     if pinned_blocks:
         output.append("\n## Pinned Core Memory (Active Invariants)")
@@ -141,7 +156,7 @@ def hook_session_start(project: Optional[str] = None) -> None:
         for h in recent_hits:
             output.append(f"- {h}")
 
-    output.append("\n*Query `memory_recall` or `memory_recall_deep` for additional context.*")
+    output.append("\n*Query `memory_recall` (epistemic), `memory_timeline` (episodic), or `code_structure` (code graph) for additional context.*")
     output.append(f"<!-- AGENT_MEMORY_STARTUP_CONTEXT_END -->")
 
     print("\n".join(output))
@@ -164,8 +179,19 @@ def hook_pre_compact(project: Optional[str] = None) -> None:
 
 
 def hook_session_end(project: Optional[str] = None) -> None:
-    """SessionEnd / Stop: Commit vault and trigger background sync."""
+    """SessionEnd / Stop: Finalize episodic session, commit vault, and trigger background sync."""
+    proj = project or detect_project()
     sys.path.insert(0, str(REPO_DIR))
+    try:
+        try:
+            from agi_memory.layers.episodic_layer import EpisodicLayer
+        except ImportError:
+            from layers.episodic_layer import EpisodicLayer
+        ep = EpisodicLayer(project=proj)
+        ep.end_session(project=proj)
+    except Exception:
+        pass
+
     try:
         try:
             from agi_memory import sync
@@ -202,7 +228,7 @@ def hook_pre_commit() -> None:
 
 
 def hook_post_commit(project: Optional[str] = None) -> None:
-    """Git post-commit: Record meaningful commit message into session memory."""
+    """Git post-commit: Record commit into session & episodic memory, incrementally index code graph."""
     proj = project or detect_project()
     sys.path.insert(0, str(REPO_DIR))
 
@@ -238,10 +264,47 @@ def hook_post_commit(project: Optional[str] = None) -> None:
 
         try:
             from agi_memory.layers.session_layer import SessionLayer
+            from agi_memory.layers.episodic_layer import EpisodicLayer
+            from agi_memory.layers.code_layer import CodeLayer
         except ImportError:
             from layers.session_layer import SessionLayer
+            from layers.episodic_layer import EpisodicLayer
+            from layers.code_layer import CodeLayer
+
         l1 = SessionLayer(project=proj)
         l1.record(text=text, title=f"Git commit: {subject[:50]}", project=proj, category=category)
+
+        # Record into episodic history
+        try:
+            ep = EpisodicLayer(project=proj)
+            last_sess = ep.get_last_session(project=proj)
+            sid = last_sess["session_id"] if last_sess else "active"
+            ep.record_event(
+                session_id=sid,
+                event_type="commit",
+                summary=f"Commit {cid}: {subject}",
+                details={"hash": cid, "subject": subject},
+                project=proj
+            )
+        except Exception:
+            pass
+
+        # Incrementally update structural code graph
+        try:
+            diff_files = subprocess.check_output(
+                ["git", "diff-tree", "--no-commit-id", "--name-only", "-r", cid],
+                stderr=subprocess.DEVNULL,
+                text=True
+            ).splitlines()
+            if diff_files:
+                cl = CodeLayer(project=proj)
+                for df in diff_files:
+                    f_path = Path(df.strip())
+                    if f_path.is_file():
+                        cl.index_file(f_path, project=proj)
+        except Exception:
+            pass
+
     except Exception:
         pass
 

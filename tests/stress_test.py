@@ -350,7 +350,48 @@ def run_stress_test(db_override: Path | None = None, vault_override: Path | None
     else:
         print("  (Vault observations.jsonl not found, skipping file compaction benchmark)")
 
-    # 11. Final Memory Footprint
+    # 11. Episodic Session Lifecycle & Timeline Retrieval
+    print("\n[Tier 11] Episodic Session Lifecycle & Timeline Retrieval")
+    from agi_memory.layers.episodic_layer import EpisodicLayer
+    ep_bench = EpisodicLayer(db_path=db_path, project="bench-proj")
+    t_ep_start = time.perf_counter()
+    bench_sess = ep_bench.start_session(goal="Benchmark episodic session lifecycle", branch="main", head="b1c2d3e")
+    for i in range(10):
+        ep_bench.record_event(bench_sess["session_id"], "edit", f"Edit file {i}", details=f"src/file_{i}.py")
+    ep_bench.end_session(bench_sess["session_id"], summary="Completed episodic stress run", touched_files=[f"src/file_{i}.py" for i in range(5)])
+    ep_lifecycle_ms = (time.perf_counter() - t_ep_start) * 1000.0
+
+    t_tl_start = time.perf_counter()
+    for _ in range(50):
+        tl = ep_bench.get_timeline(project="bench-proj", limit=10)
+    timeline_latency_ms = ((time.perf_counter() - t_tl_start) / 50.0) * 1000.0
+    print(f"  Episodic Full Lifecycle (Start+10 Events+End) : {ep_lifecycle_ms:.2f} ms")
+    print(f">> Timeline Retrieval Latency                    : {timeline_latency_ms:.3f} ms (<0.5ms target)")
+
+    # 12. Structural Code Graph AST Indexing & Recursive Impact Analysis
+    print("\n[Tier 12] Structural Code Graph AST Indexing & Recursive Impact Analysis")
+    from agi_memory.layers.code_layer import CodeLayer
+    cl_bench = CodeLayer(db_path=db_path, project="bench-code")
+    src_dir = _SRC / "agi_memory"
+    t_idx_start = time.perf_counter()
+    idx_summary = cl_bench.index_directory(src_dir, project="bench-code", force=True)
+    idx_time_ms = (time.perf_counter() - t_idx_start) * 1000.0
+
+    t_caller_start = time.perf_counter()
+    for _ in range(50):
+        c_res = cl_bench.get_callers("get_default_db", project="bench-code", max_depth=4)
+    caller_latency_ms = ((time.perf_counter() - t_caller_start) / 50.0) * 1000.0
+
+    t_impact_start = time.perf_counter()
+    for _ in range(50):
+        imp_res = cl_bench.get_impact("config.py", project="bench-code", max_depth=5)
+    impact_latency_ms = ((time.perf_counter() - t_impact_start) / 50.0) * 1000.0
+
+    print(f"  Code Graph Indexing ({idx_summary['files_indexed']} files, {idx_summary['total_symbols']} symbols) : {idx_time_ms:.2f} ms")
+    print(f">> Recursive Caller Traversal (get_callers)      : {caller_latency_ms:.2f} ms")
+    print(f">> Blast Radius Impact Analysis (get_impact)     : {impact_latency_ms:.2f} ms")
+
+    # Final Memory Footprint
     final_ram = get_process_memory_mb()
     print("\n" + "=" * 80)
     print("  COMPREHENSIVE STRESS TEST SCOREBOARD")
@@ -359,6 +400,9 @@ def run_stress_test(db_override: Path | None = None, vault_override: Path | None
     print(f"  L1 Working Memory Recall (p50)   : {p50:.2f} ms")
     print(f"  L1 Working Memory Recall (p95)   : {p95:.2f} ms")
     print(f"  L2 Recursive Graph Traversal     : {median_graph:.2f} ms (<0.5ms invariant met)")
+    print(f"  L3 Episodic Timeline Retrieval   : {timeline_latency_ms:.3f} ms")
+    print(f"  L4 Code Recursive Traversal      : {caller_latency_ms:.3f} ms")
+    print(f"  L4 Blast Radius Impact Analysis  : {impact_latency_ms:.3f} ms")
     print(f"  Entity Alias Resolution Speed    : {alias_throughput:,.0f} lookups/sec ({alias_latency_us:.3f} µs)")
     print(f"  Core Memory Block Retrieval      : {avg_core:.3f} ms")
     print(f"  Full Tiered Recall Latency (p50) : {median_tiered:.2f} ms")

@@ -28,7 +28,7 @@ Before committing or pushing any code changes, all 4 test suites must pass:
    ```bash
    agi-integrate test
    ```
-   Verifies JSON-RPC 2.0 stdio communication, `initialize`, `ping`, and registration of all 9 tools:
+   Verifies JSON-RPC 2.0 stdio communication, `initialize`, `ping`, and registration of all 15 tools:
    - `memory_recall`
    - `memory_recall_deep`
    - `memory_record`
@@ -38,18 +38,26 @@ Before committing or pushing any code changes, all 4 test suites must pass:
    - `memory_unpin`
    - `memory_blocks`
    - `memory_bootstrap`
+   - `memory_timeline`
+   - `code_structure`
+   - `code_callers`
+   - `code_dependencies`
+   - `code_impact`
+   - `code_index`
 
-5. **Comprehensive 11-Tier Production Stress Test**:
+5. **Comprehensive 12-Tier Production Stress Test**:
    ```bash
    python3 tests/stress_test.py
    ```
    Evaluates full production performance against real multi-thousand observation datasets:
    - L1 Working Memory latency (<8ms p50, <16ms p95 on 14k observations)
    - L2 Recursive CTE traversal (<0.5ms)
-   - Pure-SQL entity alias resolution (>6M lookups/sec, ~0.16 µs)
-   - Core Memory block retrieval (<0.3ms)
-   - Multi-agent concurrency throughput (>150 QPS across 100 concurrent workers)
+   - Pure-SQL entity alias resolution (>4M lookups/sec, ~0.24 µs)
+   - Core Memory block retrieval (<0.6ms)
+   - Multi-agent concurrency throughput (>500 QPS across 100 concurrent workers)
    - In-flight conflict steering & temporal supersedence
-   - Lifecycle hook latency (<10ms)
-   - Vault compaction throughput (>4,000 records/sec)
-   - RSS memory footprint (0 MB idle RAM, 0 background daemons)
+   - Lifecycle hook latency (<35ms)
+   - Vault compaction throughput (>5,000 records/sec)
+   - Episodic session lifecycle & timeline retrieval (<0.5ms)
+   - Structural code graph AST indexing & recursive impact analysis
+   - RSS memory footprint (0 MB idle background RAM, 0 background daemons)
