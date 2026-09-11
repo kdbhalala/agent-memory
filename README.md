@@ -1,6 +1,7 @@
-# agent-memory
+# agi-memory
 
-[![CI](https://github.com/kdbhalala/agent-memory/actions/workflows/ci.yml/badge.svg)](https://github.com/kdbhalala/agent-memory/actions)
+[![CI](https://github.com/kdbhalala/agi-memory/actions/workflows/ci.yml/badge.svg)](https://github.com/kdbhalala/agi-memory/actions)
+[![PyPI](https://img.shields.io/pypi/v/agi-memory.svg)](https://pypi.org/project/agi-memory/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Dependencies](https://img.shields.io/badge/dependencies-0%20(stdlib)-brightgreen.svg)](pyproject.toml)
 [![Latency](https://img.shields.io/badge/L2%20graph%20latency-0.35ms-blue.svg)](eval_l2.py)
@@ -165,9 +166,9 @@ graph TD
 ## Turnkey Setup in 10 Seconds
 
 ### Option A: Homebrew (macOS & Linux)
-Places `agent-memory` globally on your `$PATH` (`/opt/homebrew/bin/agent-memory`). All GUI assistants (Cursor, Claude Desktop, Windsurf) and terminal CLIs discover it with zero path configuration:
+Places `agi-memory` globally on your `$PATH` (`/opt/homebrew/bin/agi-memory`). All GUI assistants (Cursor, Claude Desktop, Windsurf) and terminal CLIs discover it with zero path configuration:
 ```bash
-brew install kdbhalala/tap/agent-memory
+brew install kdbhalala/tap/agi-memory
 ```
 
 ### Option B: PyPI / uvx (Universal Python - `agi-memory`)
@@ -182,15 +183,15 @@ pipx install agi-memory
 ```
 
 ### Option C: One-Line Installer Script
-Zero external dependencies. Automatically verifies Python 3.10+, installs CLI binaries (`agent-memory`, `agent-integrate`, `agent-bootstrap`, `agent-hooks`, `agent-recall`, `agent-sync`) into `~/.local/bin`, initializes your canonical vault, and wires all 12 coding assistants with lifecycle hooks:
+Zero external dependencies. Automatically verifies Python 3.10+, installs CLI binaries (`agi-memory`, `agi-integrate`, `agi-bootstrap`, `agi-hooks`, `agi-recall`, `agi-sync`) into `~/.local/bin`, initializes your canonical vault, and wires all 12 coding assistants with lifecycle hooks:
 ```bash
-curl -fsSL https://raw.githubusercontent.com/kdbhalala/agent-memory/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/kdbhalala/agi-memory/main/install.sh | bash
 ```
 
 ### Option D: Local Repository Clone
 ```bash
-git clone https://github.com/kdbhalala/agent-memory.git
-cd agent-memory
+git clone https://github.com/kdbhalala/agi-memory.git
+cd agi-memory
 python3 integrate.py install all
 ```
 

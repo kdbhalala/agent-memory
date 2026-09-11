@@ -28,13 +28,19 @@ py-modules = ["config", "mcp_server", "integrate", "bootstrap", "hooks", "recall
 [project.scripts]
 agi-memory = "mcp_server:main"
 agent-memory = "mcp_server:main"
+agi-integrate = "integrate:main"
 agent-integrate = "integrate:main"
+agi-bootstrap = "bootstrap:main"
 agent-bootstrap = "bootstrap:main"
+agi-hooks = "hooks:main"
 agent-hooks = "hooks:main"
+agi-recall = "recall:main"
 agent-recall = "recall:main"
+agi-sync = "sync:main"
 agent-sync = "sync:main"
 
 [project.urls]
-Homepage = "https://github.com/kdbhalala/agent-memory"
-Repository = "https://github.com/kdbhalala/agent-memory"
-Issues = "https://github.com/kdbhalala/agent-memory/issues"
+Homepage = "https://github.com/kdbhalala/agi-memory"
+Repository = "https://github.com/kdbhalala/agi-memory"
+Issues = "https://github.com/kdbhalala/agi-memory/issues"
+

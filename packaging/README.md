@@ -40,26 +40,26 @@ Distributed via the Homebrew tap `kdbhalala/homebrew-tap`.
 ### User Installation
 ```bash
 # Install directly from the tap
-brew install kdbhalala/tap/agent-memory
+brew install kdbhalala/tap/agi-memory
 
 # Or tap first
 brew tap kdbhalala/tap
-brew install agent-memory
+brew install agi-memory
 ```
 
 ### Advantages of Homebrew
-- Places `agent-memory` globally on `$PATH` (`/opt/homebrew/bin/agent-memory`).
-- GUI desktop clients (Cursor, Claude Desktop, Windsurf) can invoke `agent-memory` directly without path resolution or python virtual environment management:
+- Places `agi-memory` globally on `$PATH` (`/opt/homebrew/bin/agi-memory`).
+- GUI desktop clients (Cursor, Claude Desktop, Windsurf) can invoke `agi-memory` directly without path resolution or python virtual environment management:
 ```json
 {
   "mcpServers": {
-    "agent-memory": {
-      "command": "agent-memory"
+    "agi-memory": {
+      "command": "agi-memory"
     }
   }
 }
 ```
-- Upgrades are unified: `brew upgrade agent-memory`.
+- Upgrades are unified: `brew upgrade agi-memory`.
 
 ---
 
@@ -68,17 +68,18 @@ brew install agent-memory
 To initialize the tap on GitHub:
 ```bash
 # 1. Create the public tap repository
-gh repo create kdbhalala/homebrew-tap --public --description "Homebrew Tap for agent-memory"
+gh repo create kdbhalala/homebrew-tap --public --description "Homebrew Tap for agi-memory"
 
 # 2. Clone and add the Formula
 git clone https://github.com/kdbhalala/homebrew-tap.git /tmp/homebrew-tap
 mkdir -p /tmp/homebrew-tap/Formula
+cp Formula/agi-memory.rb /tmp/homebrew-tap/Formula/
 cp Formula/agent-memory.rb /tmp/homebrew-tap/Formula/
 
 # 3. Commit and push
 cd /tmp/homebrew-tap
-git add Formula/agent-memory.rb
-git commit -m "feat: add agent-memory formula"
+git add Formula/
+git commit -m "feat: add agi-memory and agent-memory formulas"
 git push origin main
 ```
 

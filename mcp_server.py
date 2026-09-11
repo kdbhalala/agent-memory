@@ -289,7 +289,7 @@ def run_mcp_server():
             if method == "initialize":
                 reply(mid, {"protocolVersion": "2024-11-05",
                             "capabilities": {"tools": {}},
-                            "serverInfo": {"name": "agent-memory", "version": "0.1.0"}})
+                            "serverInfo": {"name": "agi-memory", "version": "0.1.0"}})
                 # Trigger initial background pull to sync multi-device memories
                 try:
                     import threading
@@ -518,28 +518,29 @@ def main(argv: list[str] | None = None) -> None:
             cmd_recall(argv[1:])
             return
         elif cmd in ("-v", "--version", "version"):
-            print("agent-memory 0.1.0")
+            print("agi-memory 0.1.0")
             return
         elif cmd in ("-h", "--help", "help"):
-            print("agent-memory: Zero-dependency two-layer AI memory framework with MCP server.\n")
+            print("agi-memory: Zero-dependency two-layer AI memory framework with MCP server.\n")
             print("Usage:")
-            print("  agent-memory                         Start MCP stdio server")
-            print("  agent-memory bootstrap [--repo .]    Bootstrap initial memories from Git & README")
-            print("  agent-memory log [--limit 20]        List recent observations")
-            print("  agent-memory inspect <id>            Inspect observation details and facts")
-            print("  agent-memory delete <id> [--hard]    Delete/supersede an observation")
-            print("  agent-memory recall <query>          Search working & durable memory")
-            print("  agent-memory pin <key> <content>     Pin critical invariant to core memory")
-            print("  agent-memory unpin <key>             Unpin block from core memory")
-            print("  agent-memory blocks                  List pinned core memory blocks")
-            print("  agent-memory integrate [COMMAND ...] Assistant integration & project scaffolding")
-            print("  agent-memory hooks [TOOLS ...]       Manage automated lifecycle hooks")
-            print("  agent-memory status                  Show MCP integration status")
-            print("  agent-memory sync [now|dedupe|init]  Manage multi-device vault synchronization")
-            print("  agent-memory test                    Verify MCP handshake and registered tools\n")
+            print("  agi-memory                           Start MCP stdio server")
+            print("  agi-memory bootstrap [--repo .]      Bootstrap initial memories from Git & README")
+            print("  agi-memory log [--limit 20]          List recent observations")
+            print("  agi-memory inspect <id>              Inspect observation details and facts")
+            print("  agi-memory delete <id> [--hard]      Delete/supersede an observation")
+            print("  agi-memory recall <query>            Search working & durable memory")
+            print("  agi-memory pin <key> <content>       Pin critical invariant to core memory")
+            print("  agi-memory unpin <key>               Unpin block from core memory")
+            print("  agi-memory blocks                    List pinned core memory blocks")
+            print("  agi-memory integrate [COMMAND ...]   Assistant integration & project scaffolding")
+            print("  agi-memory hooks [TOOLS ...]         Manage automated lifecycle hooks")
+            print("  agi-memory status                    Show MCP integration status")
+            print("  agi-memory sync [now|dedupe|init]    Manage multi-device vault synchronization")
+            print("  agi-memory test                      Verify MCP handshake and registered tools\n")
+            print("Note: 'agent-memory' is supported as a 100% backwards-compatible CLI alias.\n")
             return
         else:
-            print(f"Unknown command: {cmd}. Run 'agent-memory --help' for usage.", file=sys.stderr)
+            print(f"Unknown command: {cmd}. Run 'agi-memory --help' for usage.", file=sys.stderr)
             sys.exit(1)
 
     run_mcp_server()

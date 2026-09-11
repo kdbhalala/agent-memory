@@ -1,15 +1,15 @@
-# agent-memory - AI Assistant Workspace Guide
+# agi-memory - AI Assistant Workspace Guide
 
 Turnkey zero-dependency two-layer memory architecture (SQLite FTS5 + Recursive Knowledge Graph) with MCP server for Claude Code, Cursor, Codex, OpenCode, Antigravity, and all major coding assistants.
 
-## Memory Discipline (agent-memory MCP)
+## Memory Discipline (agi-memory MCP)
 
 This repository implements the two-layer memory architecture (SessionLayer L1 + GraphLayer L2).
 When operating in this codebase:
-1. Call `memory_recall(query, project="agent-memory")` to check past decisions and bugfixes before modifying code.
-2. Call `memory_recall_deep(query, project="agent-memory")` when architectural or cross-project context is needed.
-3. Call `memory_record(text, title, project="agent-memory", category="...", supersedes="...", relations=[...])` when establishing conventions or resolving non-trivial issues.
-4. Pin non-negotiable invariants using `memory_pin(key, content, category="architecture", project="agent-memory")`.
+1. Call `memory_recall(query, project="agi-memory")` to check past decisions and bugfixes before modifying code.
+2. Call `memory_recall_deep(query, project="agi-memory")` when architectural or cross-project context is needed.
+3. Call `memory_record(text, title, project="agi-memory", category="...", supersedes="...", relations=[...])` when establishing conventions or resolving non-trivial issues.
+4. Pin non-negotiable invariants using `memory_pin(key, content, category="architecture", project="agi-memory")`.
 5. Call `memory_bootstrap(repo=".")` when operating in a newly attached workspace to seed cold-start architectural memory.
 
 ## Project Structure & Navigation
@@ -17,14 +17,14 @@ When operating in this codebase:
 - `config.py`: Single Source of Truth (SSoT) for paths, directories, and environment variable resolution.
 - `layers/session_layer.py`: L1 Working Memory (SQLite FTS5 with BM25 ranking, <2ms), Core Memory blocks, and inspection/deletion APIs.
 - `layers/graph_layer.py`: L2 Knowledge Graph (SQLite recursive CTEs, <0.5ms), Bi-Temporal Edges & Entity Aliases.
-- `vault.py`: Canonical Git-friendly append-only JSONL vault (`~/.agent-memory/vault/`) & deduplication engine.
+- `vault.py`: Canonical Git-friendly append-only JSONL vault (`~/.agi-memory/vault/`) & deduplication engine.
 - `sync.py`: Background Git/GitHub sync & `gh` CLI automation.
 - `hooks.py`: Universal lifecycle hooks dispatcher (`session-start`, `pre-compact`, `session-end`, `pre-commit`).
 - `promote.py`: Automated high-signal batch prompter L1 -> L2 (`--auto`).
-- `bootstrap.py`: Zero-touch cold-start memory seeder from Git history & README (`agent-memory bootstrap`).
+- `bootstrap.py`: Zero-touch cold-start memory seeder from Git history & README (`agi-memory bootstrap`).
 - `mcp_server.py`: Model Context Protocol server exposing 9 tools (`memory_recall`, `memory_recall_deep`, `memory_record`, `memory_promote`, `memory_sync`, `memory_pin`, `memory_unpin`, `memory_blocks`, `memory_bootstrap`) and developer observability CLI (`log`, `inspect`, `delete`, `pin`, `unpin`, `blocks`, `bootstrap`).
-- `integrate.py`: Automated multi-assistant installer, cold-start seeder (`agent-integrate bootstrap`), hook integrator (`agent-integrate hooks`), and project scaffolder.
-- `Formula/agent-memory.rb`: Official Homebrew formula for tap distribution (`brew install kdbhalala/tap/agent-memory`).
+- `integrate.py`: Automated multi-assistant installer, cold-start seeder (`agi-integrate bootstrap`), hook integrator (`agi-integrate hooks`), and project scaffolder.
+- `Formula/agi-memory.rb`: Official Homebrew formula for tap distribution (`brew install kdbhalala/tap/agi-memory`).
 
 ## Modular Rules & Context
 
