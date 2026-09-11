@@ -15,7 +15,7 @@ class AgiMemory < Formula
   end
 
   test do
-    assert_match "agi-memory 0.1.0", shell_output("#{bin}/agi-memory --version")
+    assert_match "agi-memory 0.1.1", shell_output("#{bin}/agi-memory --version")
     assert_match "Turnkey integration tool", shell_output("#{bin}/agi-integrate --help")
     assert_match "Recall from agent session", shell_output("#{bin}/agi-recall --help")
   end

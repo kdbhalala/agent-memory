@@ -28,6 +28,7 @@ def update_formula(version: str, sha256_hash: str | None = None) -> None:
             content = f_path.read_text(encoding="utf-8")
             content = re.sub(r'url ".*?"', f'url "{tarball_url}"', content)
             content = re.sub(r'sha256 ".*?"', f'sha256 "{sha256_hash}"', content)
+            content = re.sub(r'assert_match "(agi|agent)-memory \d+\.\d+\.\d+"', f'assert_match "\\1-memory {version}"', content)
             f_path.write_text(content, encoding="utf-8")
             print(f"Updated {f_path} for v{version} (sha256: {sha256_hash})")
 

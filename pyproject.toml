@@ -1,6 +1,6 @@
 [project]
 name = "agi-memory"
-version = "0.1.0"
+version = "0.1.1"
 description = "Turnkey zero-dependency two-layer memory architecture (SQLite FTS5 + Recursive Knowledge Graph) with MCP server for Claude Code, Cursor, Codex, OpenCode, and more"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -19,25 +19,21 @@ classifiers = [
 dependencies = []
 
 [tool.setuptools.packages.find]
-where = ["."]
-include = ["layers*"]
-
-[tool.setuptools]
-py-modules = ["config", "mcp_server", "integrate", "bootstrap", "hooks", "recall", "promote", "sync", "vault", "stress_test", "eval_l1", "eval_l2", "test_offline"]
+where = ["src"]
 
 [project.scripts]
-agi-memory = "mcp_server:main"
-agent-memory = "mcp_server:main"
-agi-integrate = "integrate:main"
-agent-integrate = "integrate:main"
-agi-bootstrap = "bootstrap:main"
-agent-bootstrap = "bootstrap:main"
-agi-hooks = "hooks:main"
-agent-hooks = "hooks:main"
-agi-recall = "recall:main"
-agent-recall = "recall:main"
-agi-sync = "sync:main"
-agent-sync = "sync:main"
+agi-memory = "agi_memory.mcp_server:main"
+agent-memory = "agi_memory.mcp_server:main"
+agi-integrate = "agi_memory.integrate:main"
+agent-integrate = "agi_memory.integrate:main"
+agi-bootstrap = "agi_memory.bootstrap:main"
+agent-bootstrap = "agi_memory.bootstrap:main"
+agi-hooks = "agi_memory.hooks:main"
+agent-hooks = "agi_memory.hooks:main"
+agi-recall = "agi_memory.recall:main"
+agent-recall = "agi_memory.recall:main"
+agi-sync = "agi_memory.sync:main"
+agent-sync = "agi_memory.sync:main"
 
 [project.urls]
 Homepage = "https://github.com/kdbhalala/agi-memory"

@@ -15,7 +15,7 @@ class AgentMemory < Formula
   end
 
   test do
-    assert_match "agent-memory 0.1.0", shell_output("#{bin}/agent-memory --version")
+    assert_match "agent-memory 0.1.1", shell_output("#{bin}/agent-memory --version")
     assert_match "Turnkey integration tool", shell_output("#{bin}/agent-integrate --help")
     assert_match "Recall from agent session", shell_output("#{bin}/agent-recall --help")
   end

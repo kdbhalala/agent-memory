@@ -148,16 +148,16 @@ graph TD
     L1 -. "In-Flight Synthesis & Curated Promotion" .-> L2
 ```
 
-1. **L1 Working Memory (`layers/session_layer.py`)**:
+1. **L1 Working Memory (`src/agi_memory/layers/session_layer.py`)**:
    - Sub-2ms full-text search with BM25 ranking over recent session observations and tool fixes.
    - Real-time conflict steering (<1ms) detecting overlapping precedents and prompting agents to resolve contradictions.
    - Automatically self-bootstraps SQLite schema and triggers on first read/write with zero daemons required.
    - Direct developer inspection & deletion APIs (`get_observation`, `delete_observation`, `list_observations`).
-2. **L2 Semantic Knowledge Graph (`layers/graph_layer.py`)**:
+2. **L2 Semantic Knowledge Graph (`src/agi_memory/layers/graph_layer.py`)**:
    - Native SQLite graph tables (`graph_nodes`, `graph_edges`) with full-text search (`FTS5`).
    - Sub-millisecond (0.35ms) multi-hop recursive graph traversal using SQL Common Table Expressions (`WITH RECURSIVE`).
    - Host-native in-flight triple extraction during tool calls + zero-token heuristic extraction.
-3. **Zero-Touch Cold-Start Seeder (`bootstrap.py`)**:
+3. **Zero-Touch Cold-Start Seeder (`src/agi_memory/bootstrap.py`)**:
    - Analyzes repository `README.md` and high-signal Git history (`git log`) to seed initial L1 working memories on Day 1.
    - Idempotent and zero-dependency, eliminating empty-vault churn.
 
