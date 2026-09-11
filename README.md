@@ -134,7 +134,7 @@ graph TD
         CR["Crush / Pi"]
     end
 
-    MCP["agent-memory MCP Server (stdio)<br/><code>memory_recall</code> · <code>memory_recall_deep</code> · <code>memory_record</code> · <code>memory_promote</code> · <code>memory_sync</code>"]
+    MCP["agent-memory MCP Server (stdio)<br/><code>memory_recall</code> · <code>memory_recall_deep</code> · <code>memory_record</code> · <code>memory_promote</code> · <code>memory_sync</code><br/><code>memory_pin</code> · <code>memory_unpin</code> · <code>memory_blocks</code> · <code>memory_bootstrap</code>"]
 
     subgraph Storage ["Native Two-Layer Storage (Zero Dependencies)"]
         L1["L1 Working Memory (SQLite FTS5)<br/>1.82ms · BM25 Ranking · Auto-bootstrapped"]
@@ -151,17 +151,21 @@ graph TD
    - Sub-2ms full-text search with BM25 ranking over recent session observations and tool fixes.
    - Real-time conflict steering (<1ms) detecting overlapping precedents and prompting agents to resolve contradictions.
    - Automatically self-bootstraps SQLite schema and triggers on first read/write with zero daemons required.
+   - Direct developer inspection & deletion APIs (`get_observation`, `delete_observation`, `list_observations`).
 2. **L2 Semantic Knowledge Graph (`layers/graph_layer.py`)**:
    - Native SQLite graph tables (`graph_nodes`, `graph_edges`) with full-text search (`FTS5`).
    - Sub-millisecond (0.35ms) multi-hop recursive graph traversal using SQL Common Table Expressions (`WITH RECURSIVE`).
    - Host-native in-flight triple extraction during tool calls + zero-token heuristic extraction.
+3. **Zero-Touch Cold-Start Seeder (`bootstrap.py`)**:
+   - Analyzes repository `README.md` and high-signal Git history (`git log`) to seed initial L1 working memories on Day 1.
+   - Idempotent and zero-dependency, eliminating empty-vault churn.
 
 ---
 
 ## Turnkey Setup in 10 Seconds
 
 ### Option A: One-Line Installer (Recommended)
-Zero external dependencies. Automatically verifies Python 3.10+, installs CLI binaries (`agent-memory`, `agent-integrate`, `agent-hooks`, `agent-recall`, `agent-sync`) into `~/.local/bin`, initializes your canonical vault, and wires all 12 coding assistants with lifecycle hooks:
+Zero external dependencies. Automatically verifies Python 3.10+, installs CLI binaries (`agent-memory`, `agent-integrate`, `agent-bootstrap`, `agent-hooks`, `agent-recall`, `agent-sync`) into `~/.local/bin`, initializes your canonical vault, and wires all 12 coding assistants with lifecycle hooks:
 ```bash
 curl -fsSL https://raw.githubusercontent.com/kdbhalala/agent-memory/main/install.sh | bash
 ```
@@ -275,7 +279,7 @@ agent-sync init git@github.com:username/my-agent-memory-vault.git
 
 ## Supported Assistants Matrix
 
-Every integrated tool gains access to `memory_recall`, `memory_recall_deep`, `memory_record`, `memory_promote`, and `memory_sync`:
+Every integrated tool gains access to 9 native tools: `memory_recall`, `memory_recall_deep`, `memory_record`, `memory_promote`, `memory_sync`, `memory_pin`, `memory_unpin`, `memory_blocks`, and `memory_bootstrap`:
 
 | Assistant / Environment | Type | agent-memory MCP Config | Proactive Memory Discipline Rules |
 |---|---|---|---|
@@ -297,13 +301,29 @@ Every integrated tool gains access to `memory_recall`, `memory_recall_deep`, `me
 
 ## CLI Usage
 
-### Querying Memory
+### Developer Observability & Curation CLI
+Audit, inspect, and curate memories directly from the terminal:
 ```bash
-# Fast L1 Working Memory recall
-python recall.py "auth bug" --project my-app
+# List recent observations in a clean tabular view
+agent-memory log -n 20 --project my-app
 
-# Deep L2 Knowledge Graph recall (multi-hop traversal)
-python recall.py "state management architecture" --deep --limit 5
+# Inspect detailed facts, concepts, and full narrative of an observation
+agent-memory inspect 101
+
+# Soft-delete (mark superseded) or permanently purge an observation
+agent-memory delete 101
+agent-memory delete 101 --hard
+
+# Bootstrap initial memories on a new repo from Git history & README
+agent-memory bootstrap --repo .
+
+# Query working & durable memory directly
+agent-memory recall "state management architecture" --deep
+
+# Manage pinned core memory invariants
+agent-memory pin "zero_pip_deps" "Zero external pip dependencies" --category architecture
+agent-memory blocks
+agent-memory unpin "zero_pip_deps"
 ```
 
 ### Curating Knowledge (L1 -> L2 Knowledge Graph)
@@ -323,6 +343,7 @@ python promote.py --project my-app --limit 20
 from layers.session_layer import SessionLayer
 from layers.graph_layer import GraphLayer
 from recall import recall
+from bootstrap import bootstrap_project
 
 l1 = SessionLayer(project="my-app")
 l2 = GraphLayer(project="my-app")
@@ -343,6 +364,14 @@ search_hits = l1.search("JWT tokens")
 
 # Deep multi-hop graph recall (0.35ms)
 deep_res = recall("auth storage", l1, l2, deep=True)
+
+# Inspection & curation APIs
+obs = l1.get_observation(res["id"])
+recent = l1.list_observations(limit=10, project="my-app")
+l1.delete_observation(res["id"])
+
+# Cold-start memory bootstrapping from Git history & README
+boot_res = bootstrap_project(repo_dir=".", max_commits=20, project="my-app")
 ```
 
 ---
@@ -352,14 +381,20 @@ deep_res = recall("auth storage", l1, l2, deep=True)
 All tests run completely offline with zero API keys or external services:
 
 ```bash
-# Run unit tests (layers, SQLite FTS5, graph traversal, installer)
-python test_offline.py
+# Run unit & layer tests (all 12 offline test suites)
+python3 test_offline.py
 
-# Evaluate L1 working memory retrieval accuracy (10/10, ~3.6ms)
-python eval_l1.py
+# Evaluate L1 working memory retrieval accuracy (10/10, <2ms)
+python3 eval_l1.py
 
-# Evaluate L2 knowledge graph multi-hop traversal (6/6, ~0.35ms)
-python eval_l2.py
+# Evaluate L2 knowledge graph multi-hop traversal (6/6, <0.5ms)
+python3 eval_l2.py
+
+# Verify stdio MCP server protocol handshake across all 9 tools
+python3 integrate.py test
+
+# Run comprehensive 11-tier authentic production stress test
+python3 stress_test.py
 ```
 
 ---

@@ -82,3 +82,33 @@ python3 -c "from layers.session_layer import SessionLayer; SessionLayer(project=
 
 # Or via MCP tools: memory_pin / memory_unpin / memory_blocks
 ```
+
+### 10. Cold-Start Seeding on New Repositories
+When connecting agent-memory to a newly attached project or workspace:
+```bash
+# Seed initial architecture and git commit rationale
+agent-memory bootstrap --repo .
+
+# Or via agent-integrate
+agent-integrate bootstrap /path/to/project --max-commits 25
+```
+
+### 11. Developer Observability & Memory Curation
+Audit and curate stored memories from the command line:
+```bash
+# View recent memories in a table
+agent-memory log -n 20 --project agent-memory
+
+# Inspect observation details, facts, narrative, and concepts
+agent-memory inspect 101
+
+# Delete or supersede an observation
+agent-memory delete 101
+agent-memory delete 101 --hard
+
+# Manage pinned core invariants
+agent-memory pin "zero_pip_deps" "Zero external pip dependencies" --category architecture
+agent-memory blocks
+agent-memory unpin "zero_pip_deps"
+```
+

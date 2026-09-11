@@ -10,8 +10,10 @@
    - **Configuration SSoT** ([`config.py`](../config.py)): Centralized path resolution and environment variable defaults.
    - **L1 Working Memory** ([`layers/session_layer.py`](../layers/session_layer.py)): Fast SQLite FTS5 with BM25 ranking (<2ms), decoupled via record event listeners.
    - **L2 Knowledge Graph** ([`layers/graph_layer.py`](../layers/graph_layer.py)): SQLite recursive Common Table Expressions (`WITH RECURSIVE`) for multi-hop graph traversal (<0.5ms), decoupled via edge event listeners.
-   - **Vault Storage & Compaction** ([`vault.py`](../vault.py)): Canonical append-only JSONL files in `~/.agent-memory/vault/`.
-   - **Git Sync Engine** ([`sync.py`](../sync.py)): Automatic background push/pull to private GitHub repository.
+    - **Vault Storage & Compaction** ([`vault.py`](../vault.py)): Canonical append-only JSONL files in `~/.agent-memory/vault/`.
+    - **Git Sync Engine** ([`sync.py`](../sync.py)): Automatic background push/pull to private GitHub repository.
+    - **Cold-Start Seeder** ([`bootstrap.py`](../bootstrap.py)): Zero-touch memory bootstrapping from Git history and `README.md`.
+    - **Developer Observability & MCP Server** ([`mcp_server.py`](../mcp_server.py)): Dispatches 9 native MCP tools and CLI curation commands (`log`, `inspect`, `delete`, `pin`, `unpin`, `blocks`, `bootstrap`).
 
 3. **Code vs Data Decoupling**:
    - The code repository must never store runtime databases (`*.db`, `*.sqlite`), user state (`promoted.json`), or secrets.
@@ -46,4 +48,8 @@
      - **Lifecycle Hook Overhead**: <10ms for `session-start` prompt injection.
      - **Vault Compaction Throughput**: >4,000 records / second.
      - **Zero Background Daemons**: 0 MB idle background RAM. Run `python3 stress_test.py` to reproduce locally.
+
+9. **Zero-Touch Cold-Start Seeding**:
+   - Newly attached repositories and workspaces must self-bootstrap initial working memories from Git history (`git log`) and `README.md` via `bootstrap.py` without external model calls.
+   - Eliminates Day-1 empty vault churn while remaining strictly idempotent.
 

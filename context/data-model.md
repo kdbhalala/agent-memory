@@ -27,6 +27,12 @@ Stores granular session observations, tool executions, and precedents.
 **FTS5 Index (`observations_fts`)**:
 Full-text index on `title`, `subtitle`, `facts`, `narrative`, `concepts` with SQLite `bm25()` ranking. Synchronized via `AFTER INSERT` (`observations_ai`), `AFTER DELETE` (`observations_ad`), and `AFTER UPDATE` (`observations_au`) triggers. When superseded, records are downranked in search queries behind active records.
 
+**Data Access APIs (`SessionLayer`)**:
+- `record(text, title, project, category, supersedes, relations)`: In-flight insertion with conflict detection.
+- `get_observation(obs_id)`: Fetches a single observation by ID with parsed facts and narrative.
+- `delete_observation(obs_id, hard=False)`: Soft-delete (marks superseded) or hard-delete from SQLite and FTS5.
+- `list_observations(limit=20, project=None, include_superseded=False)`: Queries recent observations ordered by ID descending.
+
 ### `graph_nodes` Table (L2 Knowledge Graph)
 Stores entities and concepts.
 - `id`: INTEGER PRIMARY KEY AUTOINCREMENT

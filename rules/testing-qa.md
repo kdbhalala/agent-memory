@@ -10,7 +10,7 @@ Before committing or pushing any code changes, all 4 test suites must pass:
    ```bash
    python3 test_offline.py
    ```
-   Verifies layers, base classes, SQLite schema bootstrap, ranking preservation, vault export/import, deduplication/compaction, and local Git sync.
+   Verifies layers, base classes, SQLite schema bootstrap, ranking preservation, vault export/import, deduplication/compaction, local Git sync, cold-start bootstrap, observation inspection, soft/hard deletion, and developer observability CLI.
 
 2. **L1 Retrieval Evaluation**:
    ```bash
@@ -28,7 +28,7 @@ Before committing or pushing any code changes, all 4 test suites must pass:
    ```bash
    python3 integrate.py test
    ```
-   Verifies JSON-RPC 2.0 stdio communication, `initialize`, `ping`, and registration of all 8 tools:
+   Verifies JSON-RPC 2.0 stdio communication, `initialize`, `ping`, and registration of all 9 tools:
    - `memory_recall`
    - `memory_recall_deep`
    - `memory_record`
@@ -37,6 +37,7 @@ Before committing or pushing any code changes, all 4 test suites must pass:
    - `memory_pin`
    - `memory_unpin`
    - `memory_blocks`
+   - `memory_bootstrap`
 
 5. **Comprehensive 11-Tier Production Stress Test**:
    ```bash

@@ -62,7 +62,7 @@ Run the automated stdio protocol verification:
 ```bash
 python integrate.py test
 ```
-Verifies `initialize`, `ping`, and tools registration (`memory_recall`, `memory_recall_deep`, `memory_record`, `memory_promote`, `memory_sync`, `memory_pin`, `memory_unpin`, `memory_blocks`).
+Verifies `initialize`, `ping`, and tools registration (`memory_recall`, `memory_recall_deep`, `memory_record`, `memory_promote`, `memory_sync`, `memory_pin`, `memory_unpin`, `memory_blocks`, `memory_bootstrap`).
 
 ---
 
@@ -70,7 +70,7 @@ Verifies `initialize`, `ping`, and tools registration (`memory_recall`, `memory_
 
 ## The Standard MCP Tools
 
-Every integrated tool gains access to 8 native tools:
+Every integrated tool gains access to 9 native tools:
 
 | MCP Tool | Primary Use | Example Query / Action |
 |---|---|---|
@@ -82,6 +82,7 @@ Every integrated tool gains access to 8 native tools:
 | `memory_pin` | Pin mission-critical invariants to Core Memory | `{"key": "zero_pip_deps", "content": "Zero external pip dependencies"}` |
 | `memory_unpin` | Unpin an invariant from Core Memory | `{"key": "zero_pip_deps"}` |
 | `memory_blocks` | List active Core Memory blocks | `{"project": "agent-memory"}` |
+| `memory_bootstrap` | Seed initial memories from Git history & README | `{"repo": ".", "project": "my-app"}` |
 
 ---
 

@@ -42,7 +42,7 @@ python3 stress_test.py
 python3 integrate.py status
 ```
 
-**Rule**: All PRs must pass `python3 test_offline.py && python3 eval_l1.py && python3 eval_l2.py && python3 integrate.py test` before submission.
+**Rule**: All PRs must pass `python3 test_offline.py && python3 eval_l1.py && python3 eval_l2.py && python3 integrate.py test && python3 stress_test.py` before submission.
 
 ---
 
@@ -52,6 +52,7 @@ python3 integrate.py status
 2. **Speed & Efficiency**: Retrieval should remain sub-millisecond to avoid slowing down agent coding loops.
 3. **Graceful Degradation**: If an optional layer or background worker is offline, the system must degrade cleanly without throwing unhandled exceptions.
 4. **Tool Independence**: Any new agent integration must work across platforms (Linux, macOS, Windows).
+5. **Byte-for-Byte Assistant Parity**: `CLAUDE.md` and `AGENTS.md` must remain 100% byte-for-byte identical at all times (`diff -u CLAUDE.md AGENTS.md` must be empty).
 
 ---
 

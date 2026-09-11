@@ -34,3 +34,8 @@ If `memory_record` returns a `[Notice - Potential Overlap Found]` alert pointing
 For non-negotiable architectural invariants (e.g., zero external pip dependencies, test verification commands):
 - Call `memory_pin(key, content, category, project)` so the rule is permanently pinned to Core Memory and automatically injected on session startup and every recall query.
 - Use `memory_unpin(key)` if a constraint is retired or refactored.
+
+### 6. Cold-Start Bootstrapping
+When attaching an assistant to a newly cloned or initialized workspace:
+- Call `memory_bootstrap(repo=".")` or run `agent-memory bootstrap` to seed initial working memories directly from repository README and recent Git commit history.
+

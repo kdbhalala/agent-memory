@@ -18,4 +18,6 @@ Use this skill when starting non-trivial tasks, establishing project patterns, o
    - Pin non-negotiable architectural rules into Core Memory: `memory_pin(key="zero_pip_deps", content="Zero external pip dependencies", category="architecture", project="agent-memory")`. Pinned rules are unconditionally prepended to every recall and session startup context.
 4. **Sync**:
    - Ensure multi-device synchronization: `memory_sync(action="sync")`
+5. **Cold-Start Bootstrap**:
+   - For newly attached or initialized repositories: `memory_bootstrap(repo=".")` to seed initial memories from Git history and README.
 
