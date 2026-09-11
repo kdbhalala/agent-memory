@@ -171,14 +171,7 @@ Zero external dependencies. Automatically verifies Python 3.10+, installs CLI bi
 curl -fsSL https://raw.githubusercontent.com/kdbhalala/agi-memory/main/install.sh | bash
 ```
 
-### Option B: Homebrew (macOS & Linux)
-Places `agi-memory` globally on your `$PATH` (`/opt/homebrew/bin/agi-memory`). All GUI assistants (Cursor, Claude Desktop, Windsurf) and terminal CLIs discover it with zero path configuration:
-```bash
-brew tap kdbhalala/agi-memory https://github.com/kdbhalala/agi-memory
-brew install agi-memory
-```
-
-### Option C: PyPI / uvx (Universal Python - `agi-memory`)
+### Option B: PyPI / uvx (Universal Python - `agi-memory`)
 Run instantly without installation in MCP clients, or install globally via `pipx` or `pip`:
 ```bash
 # Zero-install execution in MCP clients (Claude Code, Cursor, Windsurf)
@@ -187,6 +180,13 @@ uvx agi-memory
 # Global CLI installation
 pipx install agi-memory
 # Or: pip install agi-memory
+```
+
+### Option C: Homebrew (macOS & Linux)
+Places `agi-memory` globally on your `$PATH` (`/opt/homebrew/bin/agi-memory`). All GUI assistants (Cursor, Claude Desktop, Windsurf) and terminal CLIs discover it with zero path configuration:
+```bash
+brew tap kdbhalala/agi-memory https://github.com/kdbhalala/agi-memory
+brew install agi-memory
 ```
 
 ### Option D: Local Repository Clone

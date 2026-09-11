@@ -18,14 +18,7 @@ curl -fsSL https://raw.githubusercontent.com/kdbhalala/agi-memory/main/install.s
 ```
 Installs CLI wrappers (`agi-memory`, `agi-integrate`, `agi-bootstrap`, `agi-hooks`, `agi-recall`, `agi-sync`) to `~/.local/bin`, initializes the vault, wires all detected assistants with lifecycle hooks, and tests the MCP handshake in under 2 seconds.
 
-### Option 2: Homebrew (macOS & Linux)
-```bash
-brew tap kdbhalala/agi-memory https://github.com/kdbhalala/agi-memory
-brew install agi-memory
-```
-Places `agi-memory` on global `$PATH` (`/opt/homebrew/bin/agi-memory`). GUI assistants (Cursor, Claude Desktop, Windsurf) can launch it directly without python venv management.
-
-### Option 3: PyPI / uvx (Universal Python - `agi-memory`)
+### Option 2: PyPI / uvx (Universal Python - `agi-memory`)
 ```bash
 # Zero-install runtime
 uvx agi-memory
@@ -34,6 +27,13 @@ uvx agi-memory
 pipx install agi-memory
 # Or: pip install agi-memory
 ```
+
+### Option 3: Homebrew (macOS & Linux)
+```bash
+brew tap kdbhalala/agi-memory https://github.com/kdbhalala/agi-memory
+brew install agi-memory
+```
+Places `agi-memory` on global `$PATH` (`/opt/homebrew/bin/agi-memory`). GUI assistants (Cursor, Claude Desktop, Windsurf) can launch it directly without python venv management.
 
 ### Option 4: Local Repository / Integration CLI
 The repository includes a zero-dependency CLI (`agi-integrate` / `agi_memory.integrate`) that detects installed coding assistants on your system, inspects their configuration, and wires the MCP server and proactive memory rules automatically.
