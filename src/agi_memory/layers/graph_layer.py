@@ -17,7 +17,7 @@ import urllib.request
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 
-from .base import Hit, MemoryLayer
+from .base import Hit, MemoryLayer, open_db
 
 try:
     from agi_memory.config import CLAUDE_MEM_DB, DEFAULT_DB, get_default_db
@@ -112,8 +112,8 @@ class GraphLayer(MemoryLayer):
 
     def _get_con(self, mode: str = "rw") -> sqlite3.Connection:
         if mode == "ro":
-            return sqlite3.connect(f"file:{self.db_path}?mode=ro", uri=True)
-        return sqlite3.connect(self.db_path)
+            return open_db(self.db_path, readonly=True)
+        return open_db(self.db_path)
 
     def _init_db(self) -> None:
         self.db_path.parent.mkdir(parents=True, exist_ok=True)

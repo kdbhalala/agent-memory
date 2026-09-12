@@ -190,6 +190,29 @@ with tempfile.TemporaryDirectory() as tmp_dir:
             del os.environ[env_var]
         assert str(tool.get_config_path("user")) == base_cfg, f"{tname}: env leak"
 
+# every layer connection is WAL + busy_timeout, or concurrent agents lose writes
+from agi_memory.layers.base import open_db, BUSY_TIMEOUT_S
+assert BUSY_TIMEOUT_S >= 5, BUSY_TIMEOUT_S
+with tempfile.TemporaryDirectory() as tmp_dir:
+    _db = Path(tmp_dir) / "wal.db"
+    _con = open_db(_db)
+    assert _con.execute("PRAGMA journal_mode").fetchone()[0].lower() == "wal"
+    assert _con.execute("PRAGMA busy_timeout").fetchone()[0] == int(BUSY_TIMEOUT_S * 1000)
+    _con.execute("CREATE TABLE t(x)")
+    _con.commit()
+    _con.close()
+    # readonly connections must carry the timeout too
+    _ro = open_db(_db, readonly=True)
+    assert _ro.execute("PRAGMA busy_timeout").fetchone()[0] == int(BUSY_TIMEOUT_S * 1000)
+    _ro.close()
+# no layer may bypass the helper with a bare sqlite3.connect
+_src_root = Path(__file__).resolve().parent.parent / "src" / "agi_memory"
+for _f in list((_src_root / "layers").glob("*.py")) + [_src_root / "vault.py"]:
+    if _f.name == "base.py":
+        continue
+    assert "sqlite3.connect(" not in _f.read_text(encoding="utf-8"), \
+        f"{_f.name} opens SQLite directly; use open_db() so WAL/busy_timeout apply"
+
 # analyze reads real project facts, never placeholder prose
 from agi_memory import analyze as _an
 from agi_memory import init_command as _ic

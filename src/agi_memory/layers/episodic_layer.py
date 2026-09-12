@@ -18,11 +18,11 @@ from typing import Any, Dict, List, Optional, Tuple
 
 try:
     from agi_memory.config import DEFAULT_DB, get_default_db
-    from agi_memory.layers.base import Hit, MemoryLayer
+    from agi_memory.layers.base import Hit, MemoryLayer, open_db
 except ImportError:
     try:
         from ..config import DEFAULT_DB, get_default_db
-        from .base import Hit, MemoryLayer
+        from .base import Hit, MemoryLayer, open_db
     except (ImportError, ValueError):
         from config import DEFAULT_DB, get_default_db
         from layers.base import Hit, MemoryLayer
@@ -97,8 +97,8 @@ class EpisodicLayer(MemoryLayer):
 
     def _get_con(self, mode: str = "rw") -> sqlite3.Connection:
         if mode == "ro":
-            return sqlite3.connect(f"file:{self.db_path}?mode=ro", uri=True)
-        return sqlite3.connect(self.db_path)
+            return open_db(self.db_path, readonly=True)
+        return open_db(self.db_path)
 
     def _init_db(self) -> None:
         """Initialize SQLite episodic tables and indexes."""

@@ -5,7 +5,7 @@
 - CodeLayer (L4): Structural code graph (AST & regex parsers, callers, dependencies, impact analysis)
 """
 
-from .base import Hit, MemoryLayer
+from .base import Hit, MemoryLayer, open_db
 from .session_layer import SessionLayer
 from .graph_layer import GraphLayer
 from .episodic_layer import EpisodicLayer

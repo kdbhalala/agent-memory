@@ -12,7 +12,7 @@ import os
 from pathlib import Path
 from typing import Callable, Optional
 
-from .base import Hit, MemoryLayer
+from .base import Hit, MemoryLayer, open_db
 
 try:
     from agi_memory.config import CLAUDE_MEM_DB, DEFAULT_DB, get_default_db
@@ -61,7 +61,7 @@ class SessionLayer(MemoryLayer):
     def _init_db(db_path: Path) -> None:
         """Self-bootstrap local SQLite FTS5 schema if running standalone."""
         db_path.parent.mkdir(parents=True, exist_ok=True)
-        con = sqlite3.connect(db_path)
+        con = open_db(db_path)
         con.execute("""
             CREATE TABLE IF NOT EXISTS observations (
                 id INTEGER PRIMARY KEY AUTOINCREMENT, memory_session_id TEXT, project TEXT,
@@ -127,7 +127,7 @@ class SessionLayer(MemoryLayer):
     def _bodies_by_id(self, ids: list[str]) -> list[Hit]:
         if not ids or not self.db_path.exists():
             return []
-        con = sqlite3.connect(f"file:{self.db_path}?mode=ro", uri=True)
+        con = open_db(self.db_path, readonly=True)
         ph = ",".join("?" for _ in ids)
         sql = ("SELECT id, project, title, facts, narrative, type FROM observations "
                f"WHERE id IN ({ph})")
@@ -156,7 +156,7 @@ class SessionLayer(MemoryLayer):
                       r"[a-z0-9]+", query.lower())
         if not tokens:
             return []
-        con = sqlite3.connect(f"file:{self.db_path}?mode=ro", uri=True)
+        con = open_db(self.db_path, readonly=True)
         sql = """SELECT observations.id FROM observations_fts
                  JOIN observations ON observations.id = observations_fts.rowid
                  WHERE observations_fts MATCH ?"""
@@ -203,7 +203,7 @@ class SessionLayer(MemoryLayer):
             self._init_db(self.db_path)
         else:
             try:
-                con_trig = sqlite3.connect(self.db_path)
+                con_trig = open_db(self.db_path)
                 con_trig.execute("""
                     CREATE TRIGGER IF NOT EXISTS observations_ad AFTER DELETE ON observations BEGIN
                         INSERT INTO observations_fts(observations_fts, rowid, title, subtitle, facts, narrative, concepts)
@@ -232,7 +232,7 @@ class SessionLayer(MemoryLayer):
         session_id = str(uuid.uuid4())
         content_hash = hashlib.sha256(text.encode()).hexdigest()[:16]
 
-        con = sqlite3.connect(self.db_path)
+        con = open_db(self.db_path)
         cur = con.cursor()
 
         # 1. Conflict / Overlap Detection
@@ -393,7 +393,7 @@ class SessionLayer(MemoryLayer):
         cat = (category or "system").strip()
         if not self.db_path.exists():
             self._init_db(self.db_path)
-        con = sqlite3.connect(self.db_path)
+        con = open_db(self.db_path)
         self._ensure_core_table(con)
         con.execute("""
             INSERT INTO core_memory_blocks (block_key, content, category, project, pinned, updated_at)
@@ -420,7 +420,7 @@ class SessionLayer(MemoryLayer):
         """Unpin a block from core memory."""
         if not self.db_path.exists():
             return False
-        con = sqlite3.connect(self.db_path)
+        con = open_db(self.db_path)
         self._ensure_core_table(con)
         cur = con.cursor()
         cur.execute("""
@@ -437,7 +437,7 @@ class SessionLayer(MemoryLayer):
         """Return all active pinned blocks (pinned = 1) where project = ? OR project = 'global' (or all if project is None)."""
         if not self.db_path.exists():
             return []
-        con = sqlite3.connect(self.db_path)
+        con = open_db(self.db_path)
         self._ensure_core_table(con)
         if project:
             sql = ("SELECT id, block_key, content, category, project, pinned, created_at, updated_at "
@@ -468,7 +468,7 @@ class SessionLayer(MemoryLayer):
         """Return all blocks."""
         if not self.db_path.exists():
             return []
-        con = sqlite3.connect(self.db_path)
+        con = open_db(self.db_path)
         self._ensure_core_table(con)
         if project:
             sql = ("SELECT id, block_key, content, category, project, pinned, created_at, updated_at "
@@ -498,7 +498,7 @@ class SessionLayer(MemoryLayer):
         """Fetch a single observation by ID, returning a structured dictionary."""
         if not self.db_path.exists():
             return None
-        con = sqlite3.connect(self.db_path)
+        con = open_db(self.db_path)
         cur = con.cursor()
         try:
             row = cur.execute("""
@@ -532,7 +532,7 @@ class SessionLayer(MemoryLayer):
         """Delete an observation by ID. Soft delete (marks superseded) by default, or hard delete."""
         if not self.db_path.exists():
             return False
-        con = sqlite3.connect(self.db_path)
+        con = open_db(self.db_path)
         cur = con.cursor()
         try:
             if hard:
@@ -554,7 +554,7 @@ class SessionLayer(MemoryLayer):
         """List recent observations ordered by id DESC."""
         if not self.db_path.exists():
             return []
-        con = sqlite3.connect(self.db_path)
+        con = open_db(self.db_path)
         cur = con.cursor()
         try:
             sql = "SELECT id, project, type, title, subtitle, narrative, created_at FROM observations"

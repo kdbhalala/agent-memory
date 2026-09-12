@@ -13,6 +13,11 @@ import os
 from pathlib import Path
 import re
 import sqlite3
+
+try:
+    from agi_memory.layers.base import open_db
+except ImportError:  # direct-script execution
+    from layers.base import open_db
 import time
 from typing import Any, Dict, List, Optional, Set, Tuple
 
@@ -117,7 +122,7 @@ def bootstrap_from_existing_claudemem(
     s_db = Path(session_db) if session_db else SESSION_DB
     s_db.parent.mkdir(parents=True, exist_ok=True)
 
-    con_target = sqlite3.connect(s_db)
+    con_target = open_db(s_db)
     con_target.execute("""
         CREATE TABLE IF NOT EXISTS observations (
             id INTEGER PRIMARY KEY AUTOINCREMENT, memory_session_id TEXT, project TEXT,
@@ -130,7 +135,7 @@ def bootstrap_from_existing_claudemem(
     cur_dst = con_target.execute("PRAGMA table_info(observations)")
     dst_cols = [r[1] for r in cur_dst.fetchall()]
 
-    con_src = sqlite3.connect(f"file:{LEGACY_CLAUDE_MEM_DB}?mode=ro", uri=True)
+    con_src = open_db(LEGACY_CLAUDE_MEM_DB, readonly=True)
     con_src.row_factory = sqlite3.Row
     try:
         rows = con_src.execute("SELECT * FROM observations").fetchall()
@@ -292,7 +297,7 @@ def export_dirty_to_vault(
                         continue
 
     if s_db.exists():
-        con = sqlite3.connect(f"file:{s_db}?mode=ro", uri=True)
+        con = open_db(s_db, readonly=True)
         con.row_factory = sqlite3.Row
         try:
             cur = con.execute("""
@@ -342,7 +347,7 @@ def export_dirty_to_vault(
                         continue
 
     if g_db.exists():
-        con = sqlite3.connect(f"file:{g_db}?mode=ro", uri=True)
+        con = open_db(g_db, readonly=True)
         con.row_factory = sqlite3.Row
         try:
             new_graph_lines = []
@@ -416,7 +421,7 @@ def import_from_vault(
     if obs_file.exists():
         SessionLayer._init_db(s_db)
 
-        con = sqlite3.connect(s_db)
+        con = open_db(s_db)
         existing_hashes = set(
             r[0] for r in con.execute("SELECT content_hash FROM observations WHERE content_hash IS NOT NULL").fetchall()
         )
@@ -479,7 +484,7 @@ def import_from_vault(
     if graph_file.exists():
         gl = GraphLayer(db_path=g_db)
 
-        con = sqlite3.connect(g_db)
+        con = open_db(g_db)
         with open(graph_file, "r", encoding="utf-8") as f:
             for line in f:
                 line = line.strip()
@@ -631,7 +636,7 @@ def deduplicate_and_compact(
         alias_map: Dict[str, str] = {}
         if g_db.exists():
             try:
-                con_g = sqlite3.connect(f"file:{g_db}?mode=ro", uri=True)
+                con_g = open_db(g_db, readonly=True)
                 alias_map = {r[0].lower(): r[1].lower() for r in con_g.execute("SELECT alias, canonical_name FROM graph_aliases").fetchall()}
                 con_g.close()
             except Exception:
