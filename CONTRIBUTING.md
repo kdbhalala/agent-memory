@@ -35,6 +35,9 @@ All core functionality is zero-dependency and tested offline:
 # Run the complete offline test suite (layers, SQLite FTS5, graph engine, integrate)
 python3 tests/test_offline.py && python3 tests/eval_l1.py && python3 tests/eval_l2.py && agi-integrate test
 
+# Run the adversarial robustness suite (hostile input, corruption, concurrency)
+python3 tests/chaos_test.py
+
 # Run the comprehensive 12-tier authentic stress test benchmark
 python3 tests/stress_test.py
 
@@ -42,7 +45,7 @@ python3 tests/stress_test.py
 agi-integrate status
 ```
 
-**Rule**: All PRs must pass `python3 tests/test_offline.py && python3 tests/eval_l1.py && python3 tests/eval_l2.py && agi-integrate test && python3 tests/stress_test.py` before submission.
+**Rule**: All PRs must pass `python3 tests/test_offline.py && python3 tests/eval_l1.py && python3 tests/eval_l2.py && agi-integrate test && python3 tests/chaos_test.py && python3 tests/stress_test.py` before submission.
 
 ---
 

@@ -50,6 +50,10 @@ jobs:
           python tests/eval_l1.py
           python tests/eval_l2.py
 
+      - name: Run adversarial robustness suite
+        run: |
+          python tests/chaos_test.py
+
       - name: Test MCP server stdio protocol
         run: |
           python -m agi_memory.integrate test

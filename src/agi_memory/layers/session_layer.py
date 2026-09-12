@@ -117,7 +117,12 @@ class SessionLayer(MemoryLayer):
 
     def search(self, query: str, limit: int = 5) -> list[Hit]:
         """Search working memory using SQLite FTS5 with prefix wildcard fallback."""
-        return self._via_sqlite(query, limit)
+        try:
+            return self._via_sqlite(query, limit)
+        except sqlite3.Error:
+            # Unreadable DB (corrupt, truncated, or schema not yet created by a
+            # peer layer sharing the file) degrades to "no hits", never a crash.
+            return []
 
     def _bodies_by_id(self, ids: list[str]) -> list[Hit]:
         if not ids or not self.db_path.exists():

@@ -426,7 +426,13 @@ def run_mcp_server():
             msg = json.loads(line)
         except ValueError:
             continue
+        if not isinstance(msg, dict):
+            continue  # valid JSON but not a JSON-RPC frame (list, null, scalar)
         method, mid = msg.get("method"), msg.get("id")
+        if not isinstance(method, str):
+            if mid is not None:
+                reply(mid, {}, error="missing or invalid 'method'")
+            continue
         try:
             if method == "initialize":
                 reply(mid, {"protocolVersion": "2024-11-05",
@@ -448,9 +454,13 @@ def run_mcp_server():
             elif method == "tools/list":
                 reply(mid, {"tools": TOOLS})
             elif method == "tools/call":
-                p = msg.get("params", {})
+                p = msg.get("params") or {}
+                if not isinstance(p, dict):
+                    p = {}
+                args = p.get("arguments")
                 try:
-                    text = call_tool(p.get("name", ""), p.get("arguments", {}))
+                    text = call_tool(p.get("name", ""),
+                                     args if isinstance(args, dict) else {})
                     reply(mid, {"content": [{"type": "text", "text": text}]})
                 except RuntimeError as e:
                     reply(mid, {"content": [{"type": "text", "text": f"unavailable: {e}"}],

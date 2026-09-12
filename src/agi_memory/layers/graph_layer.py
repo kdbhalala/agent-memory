@@ -103,7 +103,12 @@ class GraphLayer(MemoryLayer):
         self.project = project
         self.on_edge = on_edge
         self._alias_cache: dict[str, str] = {}
-        self._init_db()
+        try:
+            self._init_db()
+        except sqlite3.Error:
+            # Corrupt/unreadable DB must not brick construction; reads
+            # degrade to empty and writes surface the error at call time.
+            pass
 
     def _get_con(self, mode: str = "rw") -> sqlite3.Connection:
         if mode == "ro":
@@ -536,6 +541,13 @@ class GraphLayer(MemoryLayer):
             return None
 
     def search(self, query: str, limit: int = 5, include_inactive: bool = False) -> List[Hit]:
+        """Search graph, degrading to no hits if the DB is unreadable."""
+        try:
+            return self._search(query, limit, include_inactive)
+        except sqlite3.Error:
+            return []
+
+    def _search(self, query: str, limit: int = 5, include_inactive: bool = False) -> List[Hit]:
         """Search graph: match starting entities/facts and traverse connected relations."""
         tokens = [t for t in re.findall(r"[a-zA-Z0-9_-]+", query.lower()) if len(t) > 2]
         if not tokens:

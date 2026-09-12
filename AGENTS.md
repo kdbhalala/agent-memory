@@ -47,5 +47,6 @@ When operating in this codebase:
 Always run before committing:
 ```bash
 python3 tests/test_offline.py && python3 tests/eval_l1.py && python3 tests/eval_l2.py && agi-integrate test
+python3 tests/chaos_test.py   # adversarial: hostile input, corruption, concurrency
 python3 tests/stress_test.py
 ```

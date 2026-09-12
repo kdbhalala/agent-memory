@@ -88,7 +88,12 @@ class EpisodicLayer(MemoryLayer):
     def __init__(self, db_path: Path | str | None = None, project: str | None = None):
         self.db_path = Path(db_path) if db_path else get_default_db()
         self.project = project
-        self._init_db()
+        try:
+            self._init_db()
+        except sqlite3.Error:
+            # Corrupt/unreadable DB must not brick construction; reads
+            # degrade to empty and writes surface the error at call time.
+            pass
 
     def _get_con(self, mode: str = "rw") -> sqlite3.Connection:
         if mode == "ro":
@@ -460,6 +465,13 @@ class EpisodicLayer(MemoryLayer):
         }
 
     def search(self, query: str, limit: int = 5) -> List[Hit]:
+        """Search episodic history, degrading to no hits if the DB is unreadable."""
+        try:
+            return self._search(query, limit)
+        except sqlite3.Error:
+            return []
+
+    def _search(self, query: str, limit: int = 5) -> List[Hit]:
         """Search past session summaries and goals."""
         con = self._get_con(mode="ro")
         cur = con.cursor()
