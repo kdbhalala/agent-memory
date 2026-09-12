@@ -271,6 +271,47 @@ def t_recall_missing_db():
     return r["recent"] == []
 
 
+def t_compaction_preserves_distinct():
+    """Compaction must never drop observations that differ in real content.
+
+    The vault is the canonical append-only store; a dedupe key that is too
+    coarse deletes a user's memories permanently.
+    """
+    vdir = Path(_TMP) / "vault-compact"
+    obs_file = vault.init_vault(vdir) / "observations.jsonl"
+    shared = "the architecture decision recorded here has a long shared preamble " * 4
+    records = [
+        # same project+title, same first 120 chars, genuinely different endings
+        {"guid": f"d{i}", "content_hash": f"d{i}", "project": "compact",
+         "title": "Decision", "narrative": shared + f" the distinct conclusion is option {i}",
+         "facts": "", "created_at_epoch": 1000 + i}
+        for i in range(5)
+    ]
+    records += [  # true duplicates: must collapse to one
+        {"guid": "dup", "content_hash": "dup", "project": "compact", "title": "Dup",
+         "narrative": "identical body", "facts": "", "created_at_epoch": 2000}
+        for _ in range(3)
+    ]
+    with open(obs_file, "w", encoding="utf-8") as f:
+        for r in records:
+            f.write(json.dumps(r) + "\n")
+
+    vault.deduplicate_and_compact(vault_dir=vdir,
+                                  session_db=Path(_TMP) / "compact.db",
+                                  graph_db=Path(_TMP) / "compact.db")
+
+    kept = [json.loads(ln) for ln in obs_file.read_text().splitlines() if ln.strip()]
+    endings = {r["narrative"][-30:] for r in kept}
+    distinct_kept = sum(1 for r in kept if r.get("title") == "Decision")
+    if distinct_kept != 5:
+        raise AssertionError(
+            f"compaction destroyed distinct observations: kept {distinct_kept}/5 "
+            f"(endings: {sorted(endings)})")
+    if sum(1 for r in kept if r.get("title") == "Dup") != 1:
+        raise AssertionError("compaction failed to collapse true duplicates")
+    return True
+
+
 def t_multiprocess_writes():
     """8 separate processes (the real multi-session case) writing the same DB."""
     import subprocess
@@ -430,6 +471,7 @@ TESTS = [
     ("concurrent episodic sessions", t_concurrent_episodic),
     ("recall hostile input", t_recall_hostile),
     ("recall with missing db", t_recall_missing_db),
+    ("compaction preserves distinct records", t_compaction_preserves_distinct),
     ("multi-process concurrent writes", t_multiprocess_writes),
     ("lifecycle hooks resilience", t_hooks_resilience),
     ("mcp malformed protocol frames", t_mcp_malformed_protocol),

@@ -593,7 +593,10 @@ def deduplicate_and_compact(
                 # Semantic key
                 norm_title = re.sub(r"[^a-z0-9]", "", title.lower())
                 norm_text = re.sub(r"[^a-z0-9]", "", full_text.lower())
-                sem_key = f"{proj}:{norm_title}:{norm_text[:120]}"
+                # Hash the FULL normalized text, never a prefix: two observations
+                # sharing a long preamble but ending differently are distinct
+                # memories, and this rewrite is destructive.
+                sem_key = f"{proj}:{norm_title}:{hashlib.sha256(norm_text.encode()).hexdigest()}"
 
                 if sem_key in seen_semantic:
                     # Keep the one with higher information or more recent epoch
