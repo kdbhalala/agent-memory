@@ -32,7 +32,7 @@ except ImportError:
     from recall import recall
     import sync
     import vault
-    __version__ = "0.2.0"
+    __version__ = "0.3.0"
 
 TOOLS = [
     {"name": "memory_recall",
@@ -699,7 +699,7 @@ def main(argv: list[str] | None = None) -> None:
             sys.argv = [sys.argv[0]] + argv[1:]
             integrate.main()
             return
-        elif cmd in ("hooks", "status", "install", "scaffold", "uninstall", "test", "generate"):
+        elif cmd in ("hooks", "status", "install", "init", "uninstall", "test", "generate"):
             try:
                 from agi_memory import integrate
             except ImportError:
@@ -724,6 +724,13 @@ def main(argv: list[str] | None = None) -> None:
                 sys.argv = [sys.argv[0]] + argv
                 integrate.main()
                 return
+        elif cmd == "analyze":
+            try:
+                from agi_memory import analyze
+            except ImportError:
+                import analyze
+            analyze.main(argv[1:])
+            return
         elif cmd == "bootstrap":
             try:
                 from agi_memory import bootstrap
@@ -791,7 +798,9 @@ def main(argv: list[str] | None = None) -> None:
             print("  agi-memory pin <key> <content>       Pin critical invariant to core memory")
             print("  agi-memory unpin <key>               Unpin block from core memory")
             print("  agi-memory blocks                    List pinned core memory blocks")
-            print("  agi-memory integrate [COMMAND ...]   Assistant integration & project scaffolding")
+            print("  agi-memory init [PATH]               Wire a project & install the /agi-init slash command")
+            print("  agi-memory analyze [PATH] [--json]   Report detected stack, commands, layout")
+            print("  agi-memory integrate [COMMAND ...]   Assistant integration & project wiring")
             print("  agi-memory hooks [TOOLS ...]         Manage automated lifecycle hooks")
             print("  agi-memory status                    Show MCP integration status")
             print("  agi-memory sync [now|dedupe|init]    Manage multi-device vault synchronization")

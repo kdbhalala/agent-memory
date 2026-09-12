@@ -119,10 +119,10 @@ Agent memory automatically triggers lifecycle hooks during coding assistant work
 4. **`pre-commit`**: Validates offline test suites and memory invariants before code is committed.
 
 ### Automated Setup (Default)
-Hooks are configured automatically when running `install all` or `scaffold`:
+Hooks are configured automatically when running `install all` or `init`:
 ```bash
 python integrate.py install all
-python integrate.py scaffold .
+python integrate.py init .
 ```
 
 ### Manual Hooks Command

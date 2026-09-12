@@ -29,7 +29,9 @@ When operating in this codebase:
   - `promote.py`: Automated high-signal batch prompter L1 -> L2 (`--auto`).
   - `bootstrap.py`: Zero-touch cold-start memory seeder from Git history & README (`agi-memory bootstrap`).
   - `mcp_server.py`: Model Context Protocol server exposing 15 tools (`memory_recall`, `memory_recall_deep`, `memory_record`, `memory_promote`, `memory_sync`, `memory_pin`, `memory_unpin`, `memory_blocks`, `memory_bootstrap`, `memory_timeline`, `code_structure`, `code_callers`, `code_dependencies`, `code_impact`, `code_index`) and developer observability CLI.
-  - `integrate.py`: Automated multi-assistant installer, cold-start seeder (`agi-integrate bootstrap`), hook integrator (`agi-integrate hooks`), and project scaffolder.
+  - `analyze.py`: Deterministic project analysis (stack, commands, layout, schema surfaces, CI) exposed as `agi-memory analyze [--json]`.
+  - `init_command.py`: Emits the `/agi-init` slash command in every assistant's native format (Claude/Cursor/OpenCode/Codex MD, Gemini TOML, Windsurf/Cline workflows, Hermes SKILL.md).
+  - `integrate.py`: Automated multi-assistant installer, cold-start seeder (`agi-integrate bootstrap`), hook integrator (`agi-integrate hooks`), and project wiring (`agi-integrate init`).
 - `Formula/agi-memory.rb`: Official Homebrew formula (`brew tap kdbhalala/agi-memory https://github.com/kdbhalala/agi-memory && brew install agi-memory`).
 
 ## Modular Rules & Context

@@ -147,7 +147,7 @@ Direct command-line interface for human developers to audit and curate memories 
 Agent memory supports automated execution triggers across coding tools (Claude Code, Antigravity, Cursor, Codex, Git):
 
 - **Automatic Configuration**:
-  - Automatically installed during `python integrate.py install all` and `python integrate.py scaffold`.
+  - Automatically installed during `python integrate.py install all` and `python integrate.py init`.
 - **Manual Management**:
   - `agent-memory integrate hooks [tools...] [--scope user|project] [--uninstall]`
   - `agent-integrate hooks [claude|agy|git|all] [--scope user|project] [--uninstall]`

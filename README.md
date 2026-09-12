@@ -117,9 +117,9 @@ your-project/
 3. **1-Command Project Scaffolding**:
    Bootstrap this universal architecture in any new or existing repository in seconds:
    ```bash
-   python integrate.py scaffold /path/to/my-repo --name my-repo
+   python integrate.py init /path/to/my-repo --name my-repo
    ```
-   This automatically generates `.mcp.json`, `CLAUDE.md`, `AGENTS.md`, modular rules, slash commands, agent prompts, and the offline validation hook tailored to your project.
+   This wires `.mcp.json`, `CLAUDE.md`, `AGENTS.md`, modular rules, lifecycle hooks, and the `/agi-init` slash command in every assistant's own format. Then run `/agi-init` inside your assistant: it reads the codebase and writes `rules/` and `context/` for real.
 
 ---
 
@@ -231,14 +231,14 @@ agi-integrate test
 ### 3. Scaffold Any Project Repository
 Equip any existing or new codebase with universal multi-assistant rules, modular context, and `.mcp.json`:
 ```bash
-agi-integrate scaffold /path/to/my-repo --name my-repo
-# or: python3 -m agi_memory.integrate scaffold /path/to/my-repo --name my-repo
+agi-integrate init /path/to/my-repo --name my-repo
+# or: python3 -m agi_memory.integrate init /path/to/my-repo --name my-repo
 ```
 
 ### 4. Automated Lifecycle Hooks
 Lifecycle hooks run automatically across assistants, injecting context on startup and auto-compacting on session end:
 ```bash
-# Automated setup (happens automatically during install all and scaffold):
+# Automated setup (happens automatically during install all and init):
 agi-integrate hooks all
 
 # Target specific coding tools:

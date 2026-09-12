@@ -6,6 +6,7 @@ Supports:
 - Cursor
 - Windsurf
 - OpenAI Codex
+- Hermes Agent
 - OpenCode
 - Antigravity CLI (agy)
 - Aider
@@ -33,7 +34,7 @@ import shutil
 import subprocess
 import sys
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 if hasattr(sys.stdout, "reconfigure"):
     try:
@@ -253,6 +254,61 @@ def remove_yaml_subdict(text: str, parent_key: str, child_key: str) -> str:
     return "\n".join(new_lines) + "\n"
 
 
+# --- Tool location resolution -------------------------------------------------
+# Tool homes differ per user and per machine (env overrides, XDG, portable
+# installs, VS Code forks). Never hardcode one path: declare the env vars a tool
+# honors plus the known-conventional locations, and let resolve_dir pick.
+
+def xdg_config_home() -> Path:
+    """$XDG_CONFIG_HOME if set, else ~/.config."""
+    val = os.environ.get("XDG_CONFIG_HOME", "").strip()
+    return Path(val).expanduser() if val else Path.home() / ".config"
+
+
+def resolve_dir(env_vars: Sequence[str], candidates: Sequence[Path]) -> Path:
+    """First non-empty env var wins; else the first candidate that exists on
+    this machine; else candidates[0] as the create-here default."""
+    for var in env_vars:
+        val = os.environ.get(var, "").strip()
+        if val:
+            return Path(val).expanduser()
+    for cand in candidates:
+        try:
+            if cand.exists():
+                return cand
+        except OSError:
+            continue
+    return Path(candidates[0])
+
+
+def resolve_file(env_vars: Sequence[str], candidates: Sequence[Path]) -> Path:
+    """Same as resolve_dir but for a config FILE (env var points at the file)."""
+    return resolve_dir(env_vars, candidates)
+
+
+def vscode_user_dirs() -> List[Path]:
+    """User-data 'User' dirs for VS Code and its forks, most-standard first."""
+    if sys.platform == "darwin":
+        base = Path.home() / "Library" / "Application Support"
+        names = ["Code", "Code - Insiders", "VSCodium", "Cursor", "Windsurf"]
+    elif sys.platform == "win32":
+        appdata = os.environ.get("APPDATA", "").strip()
+        base = Path(appdata) if appdata else Path.home() / "AppData" / "Roaming"
+        names = ["Code", "Code - Insiders", "VSCodium", "Cursor", "Windsurf"]
+    else:
+        base = xdg_config_home()
+        names = ["Code", "Code - Insiders", "VSCodium", "Cursor", "Windsurf"]
+    portable = os.environ.get("VSCODE_PORTABLE", "").strip()
+    dirs = [Path(portable) / "user-data" / "User"] if portable else []
+    return dirs + [base / n / "User" for n in names]
+
+
+def vscode_extension_settings_dir(extension_id: str) -> Path:
+    """globalStorage/<ext>/settings for the first VS Code variant that has it."""
+    cands = [d / "globalStorage" / extension_id / "settings" for d in vscode_user_dirs()]
+    return resolve_dir((), cands)
+
+
 class ToolIntegration:
     """Base class for tool integrations."""
     name: str
@@ -365,14 +421,22 @@ class ClaudeCodeIntegration(JsonMcpToolIntegration):
     display_name = "Claude Code"
     server_type = "stdio"
 
+    def _home(self) -> Path:
+        """CLAUDE_CONFIG_DIR relocates both .claude.json and CLAUDE.md."""
+        return resolve_dir(("CLAUDE_CONFIG_DIR",), [Path.home() / ".claude"])
+
     def is_detected(self) -> bool:
-        return shutil.which("claude") is not None or (Path.home() / ".claude.json").exists()
+        return shutil.which("claude") is not None or self._home().exists() or (Path.home() / ".claude.json").exists()
 
     def get_config_path(self, scope: str = "user") -> Path:
-        return Path.home() / ".claude.json" if scope == "user" else Path.cwd() / ".claude.json"
+        if scope != "user":
+            return Path.cwd() / ".claude.json"
+        if os.environ.get("CLAUDE_CONFIG_DIR", "").strip():
+            return self._home() / ".claude.json"
+        return Path.home() / ".claude.json"
 
     def get_rules_path(self, scope: str = "user") -> Optional[Path]:
-        return Path.home() / ".claude" / "CLAUDE.md" if scope == "user" else Path.cwd() / "CLAUDE.md"
+        return self._home() / "CLAUDE.md" if scope == "user" else Path.cwd() / "CLAUDE.md"
 
 
 class CursorIntegration(JsonMcpToolIntegration):
@@ -380,14 +444,18 @@ class CursorIntegration(JsonMcpToolIntegration):
     display_name = "Cursor"
     rules_template = CURSOR_RULES_MDC
 
+    def _home(self) -> Path:
+        return resolve_dir(("CURSOR_CONFIG_DIR",), [Path.home() / ".cursor"])
+
     def is_detected(self) -> bool:
-        return (Path.home() / ".cursor").exists() or shutil.which("cursor") is not None or Path("/Applications/Cursor.app").exists()
+        return self._home().exists() or shutil.which("cursor") is not None or Path("/Applications/Cursor.app").exists()
 
     def get_config_path(self, scope: str = "user") -> Path:
-        return Path.home() / ".cursor" / "mcp.json" if scope == "user" else Path.cwd() / ".cursor" / "mcp.json"
+        return self._home() / "mcp.json" if scope == "user" else Path.cwd() / ".cursor" / "mcp.json"
 
     def get_rules_path(self, scope: str = "user") -> Optional[Path]:
-        return Path.home() / ".cursor" / "rules" / "agent-memory.mdc" if scope == "user" else Path.cwd() / ".cursor" / "rules" / "agent-memory.mdc"
+        base = self._home() if scope == "user" else Path.cwd() / ".cursor"
+        return base / "rules" / "agent-memory.mdc"
 
     def generate_rules(self) -> str:
         return CURSOR_RULES_MDC.strip()
@@ -397,11 +465,19 @@ class WindsurfIntegration(JsonMcpToolIntegration):
     name = "windsurf"
     display_name = "Windsurf"
 
+    def _home(self) -> Path:
+        return resolve_dir(("WINDSURF_CONFIG_DIR",), [
+            Path.home() / ".codeium" / "windsurf",
+            xdg_config_home() / "codeium" / "windsurf",
+        ])
+
     def is_detected(self) -> bool:
-        return (Path.home() / ".codeium" / "windsurf").exists() or shutil.which("windsurf") is not None or Path("/Applications/Windsurf.app").exists()
+        return self._home().exists() or shutil.which("windsurf") is not None or Path("/Applications/Windsurf.app").exists()
 
     def get_config_path(self, scope: str = "user") -> Path:
-        return Path.home() / ".codeium" / "windsurf" / "mcp_config.json" if scope == "user" else Path.cwd() / ".codeium" / "windsurf" / "mcp_config.json"
+        if scope == "user":
+            return self._home() / "mcp_config.json"
+        return Path.cwd() / ".codeium" / "windsurf" / "mcp_config.json"
 
     def get_rules_path(self, scope: str = "user") -> Optional[Path]:
         return Path.home() / ".windsurfrules" if scope == "user" else Path.cwd() / ".windsurfrules"
@@ -411,14 +487,18 @@ class CodexIntegration(ToolIntegration):
     name = "codex"
     display_name = "OpenAI Codex"
 
+    def _home(self) -> Path:
+        """CODEX_HOME is the documented override."""
+        return resolve_dir(("CODEX_HOME",), [Path.home() / ".codex"])
+
     def is_detected(self) -> bool:
-        return shutil.which("codex") is not None or (Path.home() / ".codex").exists()
+        return shutil.which("codex") is not None or self._home().exists()
 
     def get_config_path(self, scope: str = "user") -> Path:
-        return Path.home() / ".codex" / "config.toml" if scope == "user" else Path.cwd() / ".codex" / "config.toml"
+        return self._home() / "config.toml" if scope == "user" else Path.cwd() / ".codex" / "config.toml"
 
     def get_rules_path(self, scope: str = "user") -> Optional[Path]:
-        return Path.home() / ".codex" / "AGENTS.md" if scope == "user" else Path.cwd() / "AGENTS.md"
+        return self._home() / "AGENTS.md" if scope == "user" else Path.cwd() / "AGENTS.md"
 
     def is_configured(self, scope: str = "user") -> bool:
         p = self.get_config_path(scope)
@@ -467,19 +547,25 @@ class OpenCodeIntegration(ToolIntegration):
     name = "opencode"
     display_name = "OpenCode"
 
+    def _home(self) -> Path:
+        return resolve_dir(("OPENCODE_CONFIG_DIR",), [
+            xdg_config_home() / "opencode",
+        ])
+
     def is_detected(self) -> bool:
-        return shutil.which("opencode") is not None or (Path.home() / ".config" / "opencode").exists()
+        return shutil.which("opencode") is not None or self._home().exists()
 
     def get_config_path(self, scope: str = "user") -> Path:
-        user_jsonc = Path.home() / ".config" / "opencode" / "opencode.jsonc"
-        user_json = Path.home() / ".config" / "opencode" / "opencode.json"
         if scope == "user":
-            return user_jsonc if user_jsonc.exists() else user_json
-        proj_jsonc = Path.cwd() / "opencode.jsonc"
-        return proj_jsonc if proj_jsonc.exists() else Path.cwd() / "opencode.json"
+            env = os.environ.get("OPENCODE_CONFIG", "").strip()
+            if env:
+                return Path(env).expanduser()
+            home = self._home()
+            return resolve_file((), [home / "opencode.jsonc", home / "opencode.json"])
+        return resolve_file((), [Path.cwd() / "opencode.jsonc", Path.cwd() / "opencode.json"])
 
     def get_rules_path(self, scope: str = "user") -> Optional[Path]:
-        return Path.home() / ".config" / "opencode" / "rules.md" if scope == "user" else Path.cwd() / "AGENTS.md"
+        return self._home() / "rules.md" if scope == "user" else Path.cwd() / "AGENTS.md"
 
     def is_configured(self, scope: str = "user") -> bool:
         cfg = read_json_safe(self.get_config_path(scope))
@@ -540,17 +626,23 @@ class AntigravityIntegration(JsonMcpToolIntegration):
     display_name = "Antigravity CLI (agy)"
     extra_server_fields = {"disabled": False}
 
+    def _home(self) -> Path:
+        return resolve_dir(("GEMINI_CONFIG_DIR", "ANTIGRAVITY_HOME"), [
+            Path.home() / ".gemini",
+            Path.home() / ".antigravity",
+        ])
+
     def is_detected(self) -> bool:
-        return shutil.which("agy") is not None or (Path.home() / ".gemini").exists()
+        return shutil.which("agy") is not None or self._home().exists()
 
     def get_config_path(self, scope: str = "user") -> Path:
-        return Path.home() / ".gemini" / "config" / "mcp_config.json"
+        return self._home() / "config" / "mcp_config.json"
 
     def get_rules_path(self, scope: str = "user") -> Optional[Path]:
-        return Path.home() / ".gemini" / "GEMINI.md" if scope == "user" else Path.cwd() / "AGENTS.md"
+        return self._home() / "GEMINI.md" if scope == "user" else Path.cwd() / "AGENTS.md"
 
     def get_skill_path(self) -> Path:
-        return Path.home() / ".gemini" / "config" / "skills" / "agent-memory" / "SKILL.md"
+        return self._home() / "config" / "skills" / "agent-memory" / "SKILL.md"
 
     def are_rules_installed(self, scope: str = "user") -> bool:
         skill_ok = self.get_skill_path().exists()
@@ -564,10 +656,15 @@ class AiderIntegration(ToolIntegration):
     display_name = "Aider"
 
     def is_detected(self) -> bool:
-        return shutil.which("aider") is not None or (Path.home() / ".aider.conf.yml").exists()
+        return shutil.which("aider") is not None or self.get_config_path("user").exists()
 
     def get_config_path(self, scope: str = "user") -> Path:
-        return Path.home() / ".aider.conf.yml" if scope == "user" else Path.cwd() / ".aider.conf.yml"
+        if scope != "user":
+            return resolve_file((), [Path.cwd() / ".aider.conf.yml", Path.cwd() / ".aider.conf.yaml"])
+        return resolve_file(("AIDER_CONFIG",), [
+            Path.home() / ".aider.conf.yml",
+            Path.home() / ".aider.conf.yaml",
+        ])
 
     def get_rules_path(self, scope: str = "user") -> Optional[Path]:
         return Path.home() / ".aider.conventions.md" if scope == "user" else Path.cwd() / "CONVENTIONS.md"
@@ -625,14 +722,19 @@ class GooseIntegration(ToolIntegration):
     name = "goose"
     display_name = "Goose"
 
+    def _home(self) -> Path:
+        return resolve_dir(("GOOSE_CONFIG_DIR",), [
+            xdg_config_home() / "goose",
+        ])
+
     def is_detected(self) -> bool:
-        return shutil.which("goose") is not None or (Path.home() / ".config" / "goose").exists()
+        return shutil.which("goose") is not None or self._home().exists()
 
     def get_config_path(self, scope: str = "user") -> Path:
-        return Path.home() / ".config" / "goose" / "config.yaml" if scope == "user" else Path.cwd() / ".goosehints"
+        return self._home() / "config.yaml" if scope == "user" else Path.cwd() / ".goosehints"
 
     def get_rules_path(self, scope: str = "user") -> Optional[Path]:
-        return Path.home() / ".config" / "goose" / "hints.md" if scope == "user" else Path.cwd() / ".goosehints"
+        return self._home() / "hints.md" if scope == "user" else Path.cwd() / ".goosehints"
 
     def is_configured(self, scope: str = "user") -> bool:
         p = self.get_config_path(scope)
@@ -688,12 +790,7 @@ class ClineIntegration(JsonMcpToolIntegration):
     extra_server_fields = {"disabled": False, "autoApprove": []}
 
     def _get_base_dir(self) -> Path:
-        if sys.platform == "darwin":
-            return Path.home() / "Library" / "Application Support" / "Code" / "User" / "globalStorage" / "saoudrizwan.claude-dev" / "settings"
-        elif sys.platform == "win32":
-            return Path(os.environ.get("APPDATA", "")) / "Code" / "User" / "globalStorage" / "saoudrizwan.claude-dev" / "settings"
-        else:
-            return Path.home() / ".config" / "Code" / "User" / "globalStorage" / "saoudrizwan.claude-dev" / "settings"
+        return vscode_extension_settings_dir("saoudrizwan.claude-dev")
 
     def is_detected(self) -> bool:
         return self._get_base_dir().parent.exists() or shutil.which("code") is not None
@@ -702,7 +799,9 @@ class ClineIntegration(JsonMcpToolIntegration):
         return self._get_base_dir() / "cline_mcp_settings.json"
 
     def get_rules_path(self, scope: str = "user") -> Optional[Path]:
-        return Path.cwd() / ".clinerules"
+        # Directory form: .clinerules/ holds rule files AND workflows/.
+        # A plain .clinerules FILE would block .clinerules/workflows/.
+        return Path.cwd() / ".clinerules" / "agent-memory.md"
 
 
 class RooCodeIntegration(JsonMcpToolIntegration):
@@ -711,12 +810,7 @@ class RooCodeIntegration(JsonMcpToolIntegration):
     extra_server_fields = {"disabled": False, "autoApprove": []}
 
     def _get_base_dir(self) -> Path:
-        if sys.platform == "darwin":
-            return Path.home() / "Library" / "Application Support" / "Code" / "User" / "globalStorage" / "rooveterinaryinc.roo-cline" / "settings"
-        elif sys.platform == "win32":
-            return Path(os.environ.get("APPDATA", "")) / "Code" / "User" / "globalStorage" / "rooveterinaryinc.roo-cline" / "settings"
-        else:
-            return Path.home() / ".config" / "Code" / "User" / "globalStorage" / "rooveterinaryinc.roo-cline" / "settings"
+        return vscode_extension_settings_dir("rooveterinaryinc.roo-cline")
 
     def is_detected(self) -> bool:
         return self._get_base_dir().parent.exists() or shutil.which("code") is not None
@@ -732,11 +826,16 @@ class CrushIntegration(JsonMcpToolIntegration):
     name = "crush"
     display_name = "Crush"
 
+    def _home(self) -> Path:
+        return resolve_dir(("CRUSH_CONFIG_DIR",), [
+            xdg_config_home() / "crush",
+        ])
+
     def is_detected(self) -> bool:
-        return shutil.which("crush") is not None or (Path.home() / ".config" / "crush").exists()
+        return shutil.which("crush") is not None or self._home().exists()
 
     def get_config_path(self, scope: str = "user") -> Path:
-        return Path.home() / ".config" / "crush" / "mcp.json"
+        return self._home() / "mcp.json"
 
     def get_rules_path(self, scope: str = "user") -> Optional[Path]:
         return None
@@ -749,17 +848,88 @@ class PiIntegration(JsonMcpToolIntegration):
     name = "pi"
     display_name = "Pi"
 
+    def _home(self) -> Path:
+        return resolve_dir(("PI_HOME",), [Path.home() / ".pi"])
+
     def is_detected(self) -> bool:
-        return shutil.which("pi") is not None or (Path.home() / ".pi").exists()
+        return shutil.which("pi") is not None or self._home().exists()
 
     def get_config_path(self, scope: str = "user") -> Path:
-        return Path.home() / ".pi" / "agent" / "mcp.json"
+        return self._home() / "agent" / "mcp.json"
 
     def get_rules_path(self, scope: str = "user") -> Optional[Path]:
         return None
 
     def are_rules_installed(self, scope: str = "user") -> bool:
         return True
+
+
+class HermesIntegration(ToolIntegration):
+    """Hermes Agent — YAML config at ~/.hermes/config.yaml under `mcp_servers:`."""
+    name = "hermes"
+    display_name = "Hermes Agent"
+
+    def is_detected(self) -> bool:
+        return shutil.which("hermes") is not None or self._home().exists()
+
+    def _home(self) -> Path:
+        """HERMES_HOME wins; else %LOCALAPPDATA%\\hermes on Windows, ~/.hermes elsewhere."""
+        local = os.environ.get("LOCALAPPDATA", "").strip()
+        win_base = (Path(local) if local else Path.home() / "AppData" / "Local") / "hermes"
+        cands = [win_base, Path.home() / ".hermes"] if sys.platform == "win32" else [Path.home() / ".hermes"]
+        return resolve_dir(("HERMES_HOME",), cands)
+
+    def get_config_path(self, scope: str = "user") -> Path:
+        return self._home() / "config.yaml"
+
+    def get_rules_path(self, scope: str = "user") -> Optional[Path]:
+        # ponytail: Hermes only loads AGENTS.md from the git-root->cwd chain; the always-on
+        # global instruction file is the curated memory store.
+        if scope == "user":
+            return self._home() / "memories" / "MEMORY.md"
+        return Path.cwd() / "AGENTS.md"
+
+    def is_configured(self, scope: str = "user") -> bool:
+        p = self.get_config_path(scope)
+        return p.exists() and "agent-memory:" in p.read_text(encoding="utf-8")
+
+    def are_rules_installed(self, scope: str = "user") -> bool:
+        p = self.get_rules_path(scope)
+        return p is not None and p.exists() and "Agent Memory" in p.read_text(encoding="utf-8")
+
+    def install(self, py_path: str, srv_path: str, scope: str = "user") -> Tuple[bool, str]:
+        cfg_path = self.get_config_path(scope)
+        cfg_path.parent.mkdir(parents=True, exist_ok=True)
+        content = cfg_path.read_text(encoding="utf-8") if cfg_path.exists() else ""
+
+        child_lines = [
+            "agent-memory:",
+            f"  command: {py_path}",
+            "  args:",
+            f"    - {srv_path}",
+            "  enabled: true",
+        ]
+        new_content = inject_yaml_subdict(content, "mcp_servers", "agent-memory", child_lines)
+        cfg_path.write_text(new_content, encoding="utf-8")
+
+        rules_path = self.get_rules_path(scope)
+        if rules_path:
+            append_rules_safe(rules_path, MEMORY_RULES_MD)
+
+        return True, f"Configured {cfg_path} and rules at {rules_path}"
+
+    def uninstall(self, scope: str = "user") -> Tuple[bool, str]:
+        cfg_path = self.get_config_path(scope)
+        if cfg_path.exists():
+            content = cfg_path.read_text(encoding="utf-8")
+            cfg_path.write_text(remove_yaml_subdict(content, "mcp_servers", "agent-memory"), encoding="utf-8")
+        rules_path = self.get_rules_path(scope)
+        if rules_path:
+            remove_rules_safe(rules_path)
+        return True, f"Removed from {cfg_path}"
+
+    def generate_config(self, py_path: str, srv_path: str) -> str:
+        return f"mcp_servers:\n  agent-memory:\n    command: {py_path}\n    args:\n      - {srv_path}\n    enabled: true"
 
 
 INTEGRATIONS: List[ToolIntegration] = [
@@ -775,6 +945,7 @@ INTEGRATIONS: List[ToolIntegration] = [
     RooCodeIntegration(),
     CrushIntegration(),
     PiIntegration(),
+    HermesIntegration(),
 ]
 
 INTEGRATION_MAP = {t.name: t for t in INTEGRATIONS}
@@ -1194,7 +1365,7 @@ def cmd_test(args: argparse.Namespace) -> None:
         proc.terminate()
 
 
-def cmd_scaffold(args: argparse.Namespace) -> None:
+def cmd_init(args: argparse.Namespace) -> None:
     """Scaffold the universal multi-assistant production project architecture."""
     target = Path(getattr(args, "path", ".") or ".").resolve()
     proj_name = getattr(args, "name", None) or target.name or "my-project"
@@ -1202,7 +1373,16 @@ def cmd_scaffold(args: argparse.Namespace) -> None:
     py_path = getattr(args, "python", None) or detect_python()
     srv_path = getattr(args, "server", None) or detect_server()
 
-    print(f"\nScaffolding Universal Multi-Assistant Structure in {target} (Project: {proj_name})...\n")
+    try:
+        from agi_memory import analyze as _analyze, init_command as _init_cmd
+    except ImportError:
+        import analyze as _analyze
+        import init_command as _init_cmd
+
+    if not getattr(args, "name", None):
+        proj_name = _analyze.detect_project_name(target) or proj_name
+
+    print(f"\nWiring {target} for agent-memory (Project: {proj_name})...\n")
 
     def _write_file(rel_path: str, content: str) -> None:
         p = target / rel_path
@@ -1229,7 +1409,7 @@ def cmd_scaffold(args: argparse.Namespace) -> None:
     # 2. Universal Executive Index: AGENTS.md & CLAUDE.md
     brain_md = f"""# {proj_name} - AI Assistant Workspace Guide
 
-Universal executive index and rules for Claude Code, Cursor, Codex, OpenCode, Antigravity, and all major assistants.
+Universal executive index and rules for Claude Code, Cursor, Codex, OpenCode, Antigravity, Hermes Agent, and all major assistants.
 
 ## Memory Discipline (agent-memory MCP)
 
@@ -1237,6 +1417,12 @@ When working in this project:
 1. **Recall Prior Precedents**: Call `memory_recall(query, project="{proj_name}")` before making assumptions about architecture, conventions, or past fixes.
 2. **Deep Architecture Search**: Call `memory_recall_deep(query, project="{proj_name}")` when foundational or cross-domain context is needed.
 3. **Record Verified Decisions**: Call `memory_record(text, title, project="{proj_name}")` whenever establishing patterns or resolving non-trivial issues.
+
+## First-Run Setup
+
+The project's `rules/` and `context/` files are written by the assistant, not by
+a template. Run `/{_init_cmd.COMMAND_NAME}` in this repository to analyze the
+codebase and fill them in.
 
 ## Project Structure & Pointers
 
@@ -1260,36 +1446,30 @@ When working in this project:
 3. Keep root index files concise; let `agent-memory` handle durable memories.
 """)
 
-    _write_file("rules/architecture.md", f"""# Architecture & System Design ({proj_name})
-
-Document system boundaries, component relationships, and foundational design invariants here.
-""")
-
-    _write_file("rules/testing-qa.md", f"""# Testing & QA Standards ({proj_name})
-
-Document test runners, verification checklists, and CI/CD commands here.
-""")
+    stub = ("_Not written yet. Run `/" + _init_cmd.COMMAND_NAME + "` in this repository "
+            "so the assistant can analyze the codebase and fill this in._")
+    _write_file("rules/architecture.md",
+                f"# Architecture & System Design ({proj_name})\n\n{stub}\n")
+    _write_file("rules/testing-qa.md",
+                f"# Testing & QA Standards ({proj_name})\n\n{stub}\n")
 
     # 4. Durable context/
-    _write_file("context/data-model.md", f"""# Data Model & Schema Specifications ({proj_name})
-
-Document database schemas, API entities, and data structures here.
-""")
-
-    _write_file("context/runbook.md", f"""# Operational Runbook ({proj_name})
-
-Document build steps, deployment procedures, and troubleshooting workflows here.
-""")
+    _write_file("context/data-model.md",
+                f"# Data Model & Schema Specifications ({proj_name})\n\n{stub}\n")
+    _write_file("context/runbook.md",
+                f"# Operational Runbook ({proj_name})\n\n{stub}\n")
 
     # 5. Commands/
-    _write_file("commands/review.md", """# /review Playbook
+    _write_file("commands/review.md", f"""# /review Playbook
 
-Review recent changes against architecture invariants, testing coverage, and style conventions.
+Review recent changes against the invariants in [`rules/architecture.md`](../rules/architecture.md),
+the standards in [`rules/testing-qa.md`](../rules/testing-qa.md), and prior decisions
+recalled via `memory_recall(query, project="{proj_name}")`.
 """)
 
     _write_file("commands/test.md", """# /test Playbook
 
-Execute the primary test suite and report pass/fail status.
+Run the verification commands recorded in `rules/testing-qa.md` and report pass/fail.
 """)
 
     # 6. Assistant Adapters
@@ -1333,7 +1513,7 @@ alwaysApply: true
 2. Record patterns via `memory_record`. See `rules/architecture.md`.
 """)
 
-    _write_file(".clinerules", f"""# {proj_name} Rules
+    _write_file(".clinerules/agent-memory.md", f"""# {proj_name} Rules
 1. Query `memory_recall` with project="{proj_name}" before making architectural decisions.
 2. Record learnings via `memory_record`.
 """)
@@ -1356,8 +1536,17 @@ alwaysApply: true
     except Exception as e:
         print(f"  [-] Project hooks setup skipped: {e}")
 
-    print(f"\n[✓] Successfully scaffolded universal multi-assistant structure in {target}!")
-    print(f"Supported tools: Claude Code, Cursor, Codex, OpenCode, Antigravity, Windsurf, Aider, Cline, Roo Code.\n")
+    # 8. The /agi-init slash command, in each assistant's own format
+    cmd_results = _init_cmd.install_init_command(target, project=proj_name, force=force)
+    written = [v for v in cmd_results.values() if v.startswith("written")]
+    for path, status in sorted(cmd_results.items()):
+        rel = Path(path).relative_to(target) if str(path).startswith(str(target)) else Path(path)
+        mark = "✓" if status.startswith("written") else ("!" if status.startswith("failed") else "-")
+        print(f"  [{mark}] /{_init_cmd.COMMAND_NAME}: {rel} ({status.split(' — ')[-1]})")
+
+    print(f"\n[✓] {target} is wired for agent-memory ({len(written)} assistant command formats).")
+    print(f"\nNext: open this repo in your assistant and run  /{_init_cmd.COMMAND_NAME}")
+    print("     It analyzes the codebase and writes rules/ and context/ for real.\n")
 
 
 def cmd_hooks(args: argparse.Namespace) -> None:
@@ -1411,7 +1600,7 @@ def main() -> None:
 
     # install
     p_install = subparsers.add_parser("install", help="Configure MCP server and rules for specified tools")
-    p_install.add_argument("tools", nargs="+", help="Tool names (e.g. claude, cursor, codex, aider) or 'all'")
+    p_install.add_argument("tools", nargs="+", help="Tool names (e.g. claude, cursor, codex, hermes, aider) or 'all'")
     p_install.add_argument("--scope", choices=["user", "project"], default="user", help="Install to user or project config")
     p_install.add_argument("--python", help="Override Python executable path")
     p_install.add_argument("--server", help="Override mcp_server.py path")
@@ -1428,12 +1617,14 @@ def main() -> None:
     p_bootstrap.add_argument("--json", action="store_true", help="Output results as JSON")
 
     # scaffold
-    p_scaffold = subparsers.add_parser("scaffold", help="Scaffold production multi-assistant project structure (rules/, context/, .mcp.json)")
-    p_scaffold.add_argument("path", nargs="?", default=".", help="Target directory (default: current directory)")
-    p_scaffold.add_argument("--name", help="Project name (default: directory name)")
-    p_scaffold.add_argument("--force", action="store_true", help="Overwrite existing scaffold files")
-    p_scaffold.add_argument("--python", help="Override Python executable path")
-    p_scaffold.add_argument("--server", help="Override mcp_server.py path")
+    p_init = subparsers.add_parser("init", help="Wire a project for agent-memory and install the /agi-init slash command")
+    p_init.add_argument("path", nargs="?", default=".", help="Target directory (default: current directory)")
+    p_init.add_argument("--name", help="Project name (default: detected from manifests)")
+    p_init.add_argument("--force", action="store_true", help="Overwrite existing files")
+    p_init.add_argument("--python", help="Override Python executable path")
+    p_init.add_argument("--server", help="Override mcp_server.py path")
+    p_init.add_argument("--scope", choices=["project", "user"], default="project",
+                        help="Install the slash command per-project (default) or globally")
 
     # sync
     p_sync = subparsers.add_parser("sync", help="Manage multi-device Git sync and vault compaction")
@@ -1462,7 +1653,7 @@ def main() -> None:
 
     # generate
     p_gen = subparsers.add_parser("generate", help="Print configuration snippet for a tool")
-    p_gen.add_argument("tool", help="Tool name (e.g. claude, cursor, codex, aider)")
+    p_gen.add_argument("tool", help="Tool name (e.g. claude, cursor, codex, hermes, aider)")
     p_gen.add_argument("--python", help="Override Python executable path")
     p_gen.add_argument("--server", help="Override mcp_server.py path")
 
@@ -1474,8 +1665,8 @@ def main() -> None:
         cmd_install(args)
     elif args.command == "bootstrap":
         cmd_bootstrap(args)
-    elif args.command == "scaffold":
-        cmd_scaffold(args)
+    elif args.command == "init":
+        cmd_init(args)
     elif args.command == "sync":
         cmd_sync(args)
     elif args.command == "hooks":

@@ -160,10 +160,94 @@ with tempfile.TemporaryDirectory() as tmp_dir:
     assert "# Initial Header" in t_path.read_text()
 
 # test tool registry
-assert len(integrate.INTEGRATIONS) == 12
+assert len(integrate.INTEGRATIONS) == 13
 for tool in integrate.INTEGRATIONS:
     cfg_snip = tool.generate_config("python3", "mcp_server.py")
     assert "agent-memory" in cfg_snip
+
+# tool locations are resolved (env override > existing convention > default),
+# never hardcoded to one machine's layout
+_env_overrides = {
+    "claude": "CLAUDE_CONFIG_DIR", "cursor": "CURSOR_CONFIG_DIR", "codex": "CODEX_HOME",
+    "opencode": "OPENCODE_CONFIG_DIR", "goose": "GOOSE_CONFIG_DIR", "crush": "CRUSH_CONFIG_DIR",
+    "pi": "PI_HOME", "hermes": "HERMES_HOME", "windsurf": "WINDSURF_CONFIG_DIR",
+    "agy": "GEMINI_CONFIG_DIR",
+}
+with tempfile.TemporaryDirectory() as tmp_dir:
+    fake_home = str(Path(tmp_dir) / "toolhome")
+    for tname, env_var in _env_overrides.items():
+        tool = integrate.INTEGRATION_MAP[tname]
+        base_cfg = str(tool.get_config_path("user"))
+        os.environ[env_var] = fake_home
+        try:
+            moved_cfg = str(tool.get_config_path("user"))
+            assert moved_cfg.startswith(fake_home), f"{tname}: {env_var} ignored -> {moved_cfg}"
+            assert moved_cfg != base_cfg, f"{tname}: config path did not move"
+            rules = tool.get_rules_path("user")
+            if rules is not None and str(rules).startswith(str(Path.home())) and tname != "claude":
+                pass  # project-scope-only rules files legitimately stay outside the tool home
+        finally:
+            del os.environ[env_var]
+        assert str(tool.get_config_path("user")) == base_cfg, f"{tname}: env leak"
+
+# analyze reads real project facts, never placeholder prose
+from agi_memory import analyze as _an
+from agi_memory import init_command as _ic
+with tempfile.TemporaryDirectory() as tmp_dir:
+    proj = Path(tmp_dir) / "svc"
+    (proj / "src" / "__tests__").mkdir(parents=True)
+    (proj / "migrations").mkdir()
+    (proj / "package.json").write_text(
+        '{"name":"billing-svc","scripts":{"build":"tsc","test":"vitest run","dev":"vite"}}')
+    (proj / "pnpm-lock.yaml").write_text("")
+    (proj / "src" / "app.ts").write_text("export const a = 1\n")
+    (proj / "src" / "__tests__" / "app.test.ts").write_text("test('a',()=>{})\n")
+    (proj / "migrations" / "001.sql").write_text("CREATE TABLE t(id int);\n")
+    (proj / "README.md").write_text("# Billing\n\nUsage metering and invoicing.\n")
+    facts = _an.analyze_project(proj)
+    assert facts["name"] == "billing-svc", facts["name"]
+    assert facts["package_manager"] == "pnpm", facts["package_manager"]
+    assert "pnpm run test" in facts["test_commands"], facts["test_commands"]
+    assert "pnpm run build" in facts["build_commands"], facts["build_commands"]
+    assert "pnpm run dev" in facts["run_commands"], facts["run_commands"]
+    assert ("TypeScript", 2) in facts["languages"], facts["languages"]
+    assert any("__tests__" in t for t in facts["test_layout"]), facts["test_layout"]
+    assert any("SQL DDL" in s_ for s_ in facts["schema_surfaces"]), facts["schema_surfaces"]
+
+# an empty directory must degrade honestly, not invent facts
+with tempfile.TemporaryDirectory() as tmp_dir:
+    bare = _an.analyze_project(Path(tmp_dir))
+    assert bare["languages"] == [] and bare["test_commands"] == []
+    assert "Not detected" in _an.render_architecture(bare)
+
+# /agi-init renders in every assistant's own command format
+import tomllib
+for _fmt in _ic.RENDERERS:
+    _out = _ic.render(_fmt, project="billing-svc")
+    assert "rules/architecture.md" in _out and "<project>" not in _out, _fmt
+_toml_cmd = tomllib.loads(_ic.render("toml", "billing-svc"))
+assert "{{args}}" in _toml_cmd["prompt"] and _toml_cmd["description"], _toml_cmd
+with tempfile.TemporaryDirectory() as tmp_dir:
+    res = _ic.install_init_command(tmp_dir, project="billing-svc")
+    assert len(res) == len(_ic.PROJECT_TARGETS) >= 9, res
+    assert all(v.startswith("written") for v in res.values()), res
+    # every emitted command file must land where that tool actually looks
+    for _label, _rel, _f in _ic.PROJECT_TARGETS:
+        assert (Path(tmp_dir) / _rel).is_file(), _rel
+    assert all(v.startswith("skipped") for v in
+               _ic.install_init_command(tmp_dir, project="billing-svc").values())
+
+# scaffold is gone; init replaces it
+assert not hasattr(integrate, "cmd_scaffold"), "cmd_scaffold should be removed"
+assert hasattr(integrate, "cmd_init"), "cmd_init missing"
+
+# XDG_CONFIG_HOME relocates XDG-convention tools
+os.environ["XDG_CONFIG_HOME"] = "/tmp/agi-xdg-test"
+try:
+    assert str(integrate.INTEGRATION_MAP["goose"].get_config_path("user")).startswith("/tmp/agi-xdg-test")
+    assert str(integrate.INTEGRATION_MAP["crush"].get_config_path("user")).startswith("/tmp/agi-xdg-test")
+finally:
+    del os.environ["XDG_CONFIG_HOME"]
 
 # test native GraphLayer
 from agi_memory.layers.graph_layer import GraphLayer
