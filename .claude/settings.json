@@ -1,7 +1,8 @@
 {
   "permissions": {
     "allow": [
-      "mcp:agent-memory:*"
+      "mcp__agent-memory__*",
+      "mcp__agi-memory__*"
     ]
   }
 }

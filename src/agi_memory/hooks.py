@@ -402,6 +402,20 @@ def install_claude_hooks(scope: str = "user", py_path: str = None) -> Tuple[bool
     _ensure_hook("PreCompact", cmd_compact)
     _ensure_hook("SessionEnd", cmd_end)
 
+    # Sanitize and ensure Claude Code permission format (mcp__<server>__*)
+    perms = data.get("permissions", {})
+    if isinstance(perms, dict) and "allow" in perms and isinstance(perms["allow"], list):
+        fixed_allow = []
+        for rule in perms["allow"]:
+            if rule in ("mcp:agent-memory:*", "mcp:agi-memory:*"):
+                if "mcp__agent-memory__*" not in fixed_allow:
+                    fixed_allow.append("mcp__agent-memory__*")
+                if "mcp__agi-memory__*" not in fixed_allow:
+                    fixed_allow.append("mcp__agi-memory__*")
+            else:
+                fixed_allow.append(rule)
+        perms["allow"] = fixed_allow
+
     settings_path.parent.mkdir(parents=True, exist_ok=True)
     settings_path.write_text(json.dumps(data, indent=2), encoding="utf-8")
     return True, f"Installed Claude Code hooks in {settings_path}"

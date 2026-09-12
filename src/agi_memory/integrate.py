@@ -1294,7 +1294,14 @@ Execute the primary test suite and report pass/fail status.
 
     # 6. Assistant Adapters
     # Claude Code
-    _write_file(".claude/settings.json", json.dumps({"permissions": {"allow": ["mcp:agent-memory:*"]}}, indent=2))
+    _write_file(".claude/settings.json", json.dumps({
+        "permissions": {
+            "allow": [
+                "mcp__agent-memory__*",
+                "mcp__agi-memory__*"
+            ]
+        }
+    }, indent=2))
     _write_file(".claude/rules/memory-discipline.md", f"""# Memory Discipline
 Always call `memory_recall` with project="{proj_name}" before modifying code, and `memory_record` after landing changes.
 """)

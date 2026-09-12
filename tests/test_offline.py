@@ -577,8 +577,8 @@ with tempfile.TemporaryDirectory() as hook_tmp:
     hooks.REPO_DIR = Path(__file__).resolve().parent.parent / "src" / "agi_memory"
     orig_home = Path.home()
     
-    # Test installation directly on json
-    data = {"permissions": {}}
+    # Test installation directly on json with legacy permission format
+    data = {"permissions": {"allow": ["mcp:agent-memory:*", "bash:*"]}}
     claude_settings.parent.mkdir(parents=True, exist_ok=True)
     claude_settings.write_text(json.dumps(data), encoding="utf-8")
 
@@ -593,6 +593,12 @@ with tempfile.TemporaryDirectory() as hook_tmp:
         assert "SessionStart" in saved_claude["hooks"]
         assert "PreCompact" in saved_claude["hooks"]
         assert "SessionEnd" in saved_claude["hooks"]
+        # Verify permissions allow rules were sanitized
+        allow_rules = saved_claude.get("permissions", {}).get("allow", [])
+        assert "mcp__agent-memory__*" in allow_rules
+        assert "mcp__agi-memory__*" in allow_rules
+        assert "mcp:agent-memory:*" not in allow_rules
+        assert "bash:*" in allow_rules
 
         # Uninstall claude hooks
         ok, msg = hooks.uninstall_claude_hooks(scope="project")
