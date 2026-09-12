@@ -190,6 +190,21 @@ with tempfile.TemporaryDirectory() as tmp_dir:
             del os.environ[env_var]
         assert str(tool.get_config_path("user")) == base_cfg, f"{tname}: env leak"
 
+# the code parser must survive input no version of ast agrees on:
+# NUL bytes are a ValueError on 3.10 and a SyntaxError from 3.12 on
+import ast as _ast
+from agi_memory.layers import code_layer as _cl
+assert _cl.parse_source_code("x = 1\x00\x00", "a.py", "python") == ([], [])
+_orig_parse = _ast.parse
+def _raise_valueerror(*_a, **_k):
+    raise ValueError("source code string cannot contain null bytes")
+_ast.parse = _raise_valueerror
+try:  # simulate the 3.10 behaviour on any interpreter
+    assert _cl.parse_source_code("x = 1\x00", "a.py", "python") == ([], [])
+finally:
+    _ast.parse = _orig_parse
+assert len(_cl.parse_source_code("def f():\n    pass\n", "a.py", "python")[0]) == 1
+
 # every layer connection is WAL + busy_timeout, or concurrent agents lose writes
 from agi_memory.layers.base import open_db, BUSY_TIMEOUT_S
 assert BUSY_TIMEOUT_S >= 5, BUSY_TIMEOUT_S

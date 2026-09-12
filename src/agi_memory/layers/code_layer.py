@@ -474,7 +474,21 @@ def parse_dart_code(content: str, rel_path: str) -> Tuple[List[Dict[str, Any]], 
 
 
 def parse_source_code(content: str, rel_path: str, language: str) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
-    """Dispatcher for language-specific AST and regex parsers."""
+    """Dispatcher for language-specific AST and regex parsers.
+
+    A file that cannot be parsed yields no symbols; it never breaks the index
+    run. The guard lives here so it covers every parser, and it is broader than
+    SyntaxError on purpose: ast.parse reports NUL bytes as ValueError on Python
+    3.10 and as SyntaxError from 3.12 on, and pathological nesting in either the
+    AST or a regex parser surfaces as RecursionError.
+    """
+    try:
+        return _dispatch_parser(content, rel_path, language)
+    except (SyntaxError, ValueError, RecursionError, MemoryError, UnicodeError):
+        return [], []
+
+
+def _dispatch_parser(content: str, rel_path: str, language: str) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
     if language == "python":
         return parse_python_code(content, rel_path)
     elif language in ("javascript", "typescript"):
