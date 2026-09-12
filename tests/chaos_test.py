@@ -312,6 +312,36 @@ def t_compaction_preserves_distinct():
     return True
 
 
+def t_vault_roundtrip_survives_db_loss():
+    """Core promise: a recorded memory survives losing the SQLite DB entirely.
+
+    record -> vault -> delete DB -> import_from_vault -> still recallable.
+    """
+    vdir = Path(_TMP) / "vault-roundtrip"
+    db = Path(_TMP) / "roundtrip.db"
+    vault.init_vault(vdir)
+    vault.enable_vault_listeners()
+    try:
+        l1 = SessionLayer(db_path=db, project="roundtrip")
+        marker = "zorblax quantum ledger invariant"
+        for i in range(20):
+            l1.record(f"{marker} number {i}", title=f"Roundtrip {i}", project="roundtrip")
+        vault.export_dirty_to_vault(vault_dir=vdir, session_db=db, graph_db=db)
+    finally:
+        vault.disable_vault_listeners()
+
+    before = len(SessionLayer(db_path=db, project="roundtrip").search(marker, limit=50))
+    if before == 0:
+        raise AssertionError("records were not recallable even before DB loss")
+
+    db.unlink()  # catastrophic local loss
+    vault.import_from_vault(vault_dir=vdir, session_db=db, graph_db=db)
+    after = len(SessionLayer(db_path=db, project="roundtrip").search(marker, limit=50))
+    if after < before:
+        raise AssertionError(f"vault restore lost memories: {before} before, {after} after")
+    return True
+
+
 def t_multiprocess_writes():
     """8 separate processes (the real multi-session case) writing the same DB."""
     import subprocess
@@ -472,6 +502,7 @@ TESTS = [
     ("recall hostile input", t_recall_hostile),
     ("recall with missing db", t_recall_missing_db),
     ("compaction preserves distinct records", t_compaction_preserves_distinct),
+    ("vault roundtrip survives db loss", t_vault_roundtrip_survives_db_loss),
     ("multi-process concurrent writes", t_multiprocess_writes),
     ("lifecycle hooks resilience", t_hooks_resilience),
     ("mcp malformed protocol frames", t_mcp_malformed_protocol),
