@@ -226,7 +226,10 @@ def install_init_command(target_dir: Path | str = ".", project: str | None = Non
 
 def demo() -> None:
     """Self-check: every format renders, and the TOML stays parseable."""
-    import tomllib
+    try:
+        import tomllib  # 3.11+; parse check skipped on 3.10
+    except ModuleNotFoundError:
+        tomllib = None
 
     for fmt in RENDERERS:
         out = render(fmt, project="demo-proj")
@@ -234,10 +237,11 @@ def demo() -> None:
         assert "<project>" not in out, fmt
         assert len(out) > 500, fmt
 
-    parsed = tomllib.loads(render("toml", "demo-proj"))
-    assert parsed["description"] == DESCRIPTION
-    assert "rules/architecture.md" in parsed["prompt"]
-    assert "{{args}}" in parsed["prompt"]
+    if tomllib is not None:
+        parsed = tomllib.loads(render("toml", "demo-proj"))
+        assert parsed["description"] == DESCRIPTION
+        assert "rules/architecture.md" in parsed["prompt"]
+        assert "{{args}}" in parsed["prompt"]
 
     for fmt in ("md_frontmatter", "workflow", "skill"):
         assert render(fmt).startswith("---\n"), fmt
@@ -251,7 +255,8 @@ def demo() -> None:
         assert all(v.startswith("skipped") for v in again.values()), again
         forced = install_init_command(tmp, project="demo-proj", force=True)
         assert all(v.startswith("written") for v in forced.values()), forced
-    print(f"init_command OK: {len(PROJECT_TARGETS)} formats, TOML parses")
+    print(f"init_command OK: {len(PROJECT_TARGETS)} formats"
+          f"{', TOML parses' if tomllib else ' (TOML parse skipped: needs 3.11+)'}")
 
 
 if __name__ == "__main__":

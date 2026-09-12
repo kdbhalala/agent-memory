@@ -221,12 +221,16 @@ with tempfile.TemporaryDirectory() as tmp_dir:
     assert "Not detected" in _an.render_architecture(bare)
 
 # /agi-init renders in every assistant's own command format
-import tomllib
+try:
+    import tomllib  # 3.11+; the TOML parse check is skipped on 3.10
+except ModuleNotFoundError:
+    tomllib = None
 for _fmt in _ic.RENDERERS:
     _out = _ic.render(_fmt, project="billing-svc")
     assert "rules/architecture.md" in _out and "<project>" not in _out, _fmt
-_toml_cmd = tomllib.loads(_ic.render("toml", "billing-svc"))
-assert "{{args}}" in _toml_cmd["prompt"] and _toml_cmd["description"], _toml_cmd
+if tomllib is not None:
+    _toml_cmd = tomllib.loads(_ic.render("toml", "billing-svc"))
+    assert "{{args}}" in _toml_cmd["prompt"] and _toml_cmd["description"], _toml_cmd
 with tempfile.TemporaryDirectory() as tmp_dir:
     res = _ic.install_init_command(tmp_dir, project="billing-svc")
     assert len(res) == len(_ic.PROJECT_TARGETS) >= 9, res
@@ -241,13 +245,16 @@ with tempfile.TemporaryDirectory() as tmp_dir:
 assert not hasattr(integrate, "cmd_scaffold"), "cmd_scaffold should be removed"
 assert hasattr(integrate, "cmd_init"), "cmd_init missing"
 
-# XDG_CONFIG_HOME relocates XDG-convention tools
-os.environ["XDG_CONFIG_HOME"] = "/tmp/agi-xdg-test"
-try:
-    assert str(integrate.INTEGRATION_MAP["goose"].get_config_path("user")).startswith("/tmp/agi-xdg-test")
-    assert str(integrate.INTEGRATION_MAP["crush"].get_config_path("user")).startswith("/tmp/agi-xdg-test")
-finally:
-    del os.environ["XDG_CONFIG_HOME"]
+# XDG_CONFIG_HOME relocates XDG-convention tools (path shape differs per OS)
+with tempfile.TemporaryDirectory() as tmp_dir:
+    _xdg = Path(tmp_dir) / "xdg"
+    os.environ["XDG_CONFIG_HOME"] = str(_xdg)
+    try:
+        for _tname in ("goose", "crush"):
+            _cfg = integrate.INTEGRATION_MAP[_tname].get_config_path("user")
+            assert _xdg in _cfg.parents, f"{_tname}: XDG_CONFIG_HOME ignored -> {_cfg}"
+    finally:
+        del os.environ["XDG_CONFIG_HOME"]
 
 # test native GraphLayer
 from agi_memory.layers.graph_layer import GraphLayer
