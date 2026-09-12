@@ -110,6 +110,33 @@ Every integrated tool gains access to 15 native tools across the four cognitive 
 
 ---
 
+## The `/agi-init` Slash Command
+
+`agi-integrate init <path>` wires a project and writes an `/agi-init` command in
+every assistant's own format, so the same playbook is available whichever tool is
+open:
+
+| Assistant | Path written | Format |
+|---|---|---|
+| Claude Code | `.claude/commands/agi-init.md` | Markdown + YAML frontmatter |
+| Cursor | `.cursor/commands/agi-init.md` | Markdown |
+| OpenCode | `.opencode/commands/agi-init.md` | Markdown + YAML frontmatter |
+| OpenAI Codex | `.codex/prompts/agi-init.md` | Markdown + YAML frontmatter |
+| Antigravity / Gemini | `.gemini/commands/agi-init.toml` | TOML (`description` + `prompt`) |
+| Windsurf | `.windsurf/workflows/agi-init.md` | Workflow |
+| Cline | `.clinerules/workflows/agi-init.md` | Workflow |
+| Roo Code | `.roo/commands/agi-init.md` | Markdown |
+| Hermes Agent | `.hermes/skills/agi-init/SKILL.md` | SKILL.md |
+
+Running `/agi-init` has the assistant read the codebase and write the project's
+`rules/` and `context/` files from what it actually finds, rather than filling a
+template. `agi-memory analyze --json` gives it the deterministic facts (stack,
+package manager, build/test commands, CI) as a starting point.
+
+Use `--scope user` to install the command globally instead of per-project.
+
+---
+
 ## Lifecycle Hooks Automation (`session-start`, `pre-compact`, `session-end`, `pre-commit`)
 
 Agent memory automatically triggers lifecycle hooks during coding assistant workflows:
@@ -383,6 +410,30 @@ Append the standard Memory Discipline section from above.
   }
 }
 ```
+
+### 11. Hermes Agent CLI
+
+Hermes reads YAML rather than JSON, and honors `HERMES_HOME` (falling back to
+`%LOCALAPPDATA%\hermes` on Windows and `~/.hermes` elsewhere).
+
+#### Hermes Config (`~/.hermes/config.yaml`)
+```yaml
+mcp_servers:
+  agent-memory:
+    command: <PYTHON>
+    args:
+      - <SERVER>
+    enabled: true
+```
+
+#### Memory Discipline Rules
+Hermes only loads `AGENTS.md` from the git-root-to-cwd chain, so user-scope rules
+go to its always-loaded curated memory store instead:
+
+| Scope | Path |
+|---|---|
+| User | `~/.hermes/memories/MEMORY.md` |
+| Project | `./AGENTS.md` |
 
 ---
 

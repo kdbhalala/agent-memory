@@ -32,7 +32,7 @@ except ImportError:
     from recall import recall
     import sync
     import vault
-    __version__ = "0.3.0"
+    __version__ = "0.4.0"
 
 TOOLS = [
     {"name": "memory_recall",

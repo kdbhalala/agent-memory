@@ -81,6 +81,15 @@ def _detect_git_touched_files(cwd: Path | str | None = None) -> List[str]:
     return files
 
 
+# Question words carry no retrieval signal but would AND away every match.
+_STOPWORDS = {
+    "a", "an", "the", "is", "are", "was", "were", "do", "did", "does", "what",
+    "which", "who", "when", "where", "why", "how", "i", "we", "it", "to", "of", "in",
+    "on", "for", "about", "with", "and", "or", "my", "our", "that", "this", "there",
+    "be", "been", "have", "has", "had", "session", "sessions",
+}
+
+
 class EpisodicLayer(MemoryLayer):
     """Native SQLite Episodic Memory layer for session timeline and history."""
     name = "episodic"
@@ -214,7 +223,7 @@ class EpisodicLayer(MemoryLayer):
             cur.execute("""
                 SELECT session_id FROM episodic_sessions
                 WHERE project = ? AND status = 'active'
-                ORDER BY started_at DESC LIMIT 1
+                ORDER BY started_at DESC, id DESC LIMIT 1
             """, (proj,))
             row = cur.fetchone()
             if row:
@@ -223,7 +232,7 @@ class EpisodicLayer(MemoryLayer):
                 # Find the most recent session regardless of status
                 cur.execute("""
                     SELECT session_id FROM episodic_sessions
-                    WHERE project = ? ORDER BY started_at DESC LIMIT 1
+                    WHERE project = ? ORDER BY started_at DESC, id DESC LIMIT 1
                 """, (proj,))
                 row2 = cur.fetchone()
                 if row2:
@@ -373,7 +382,7 @@ class EpisodicLayer(MemoryLayer):
                        git_branch, git_head_before, git_head_after, summary, touched_files, commits, status
                 FROM episodic_sessions
                 WHERE project = ?
-                ORDER BY started_at DESC
+                ORDER BY started_at DESC, id DESC
                 LIMIT ?
             """, (proj, limit))
         else:
@@ -381,7 +390,7 @@ class EpisodicLayer(MemoryLayer):
                 SELECT id, session_id, project, goal, started_at, ended_at, duration_seconds,
                        git_branch, git_head_before, git_head_after, summary, touched_files, commits, status
                 FROM episodic_sessions
-                ORDER BY started_at DESC
+                ORDER BY started_at DESC, id DESC
                 LIMIT ?
             """, (limit,))
 
@@ -472,33 +481,55 @@ class EpisodicLayer(MemoryLayer):
             return []
 
     def _search(self, query: str, limit: int = 5) -> List[Hit]:
-        """Search past session summaries and goals."""
+        """Search past session goals, summaries, and touched files.
+
+        Matching is per-term, not on the raw query string. A question like
+        "haptics free functions" has to find a session whose goal reads
+        "Replace haptics service with free functions"; a single
+        LIKE %whole query% only matches a contiguous phrase, so every
+        natural-language question returned nothing.
+        """
+        terms = [t for t in re.findall(r"[a-z0-9_./-]+", query.lower()) if t not in _STOPWORDS]
+        if not terms:
+            terms = [query.strip().lower()] if query.strip() else []
+        if not terms:
+            return []
+        terms = terms[:12]
+
+        clause = "(LOWER(goal) LIKE ? OR LOWER(summary) LIKE ? OR LOWER(touched_files) LIKE ?)"
+        per_term_args = [a for t in terms for a in (f"%{t}%",) * 3]
+
+        def run(cur, joiner: str):
+            sql = ("SELECT session_id, project, goal, summary, started_at FROM episodic_sessions "
+                   "WHERE (" + joiner.join([clause] * len(terms)) + ")")
+            args = list(per_term_args)
+            if self.project:
+                sql += " AND project = ?"
+                args.append(self.project)
+            sql += " ORDER BY started_at DESC, id DESC LIMIT ?"
+            args.append(limit)
+            cur.execute(sql, args)
+            return cur.fetchall()
+
         con = self._get_con(mode="ro")
         cur = con.cursor()
-        like_term = f"%{query}%"
-
-        args: list = [like_term, like_term]
-        sql = """
-            SELECT session_id, project, goal, summary, started_at
-            FROM episodic_sessions
-            WHERE (goal LIKE ? OR summary LIKE ?)
-        """
-        if self.project:
-            sql += " AND project = ?"
-            args.append(self.project)
-        sql += " ORDER BY started_at DESC LIMIT ?"
-        args.append(limit)
-
-        cur.execute(sql, args)
-        rows = cur.fetchall()
+        rows = run(cur, " AND ")
+        if not rows and len(terms) > 1:
+            # An over-specified question should degrade to partial recall,
+            # never to silence.
+            rows = run(cur, " OR ")
         con.close()
 
         hits = []
-        for r in rows:
-            sid, proj, goal, summary, started = r
-            txt = f"[{proj}] Session {sid} ({started}): Goal: {goal or '(none)'} | Summary: {summary or '(none)'}"
-            hits.append(Hit(text=txt, source=self.name, ref=sid, score=1.0))
-        return hits
+        for sid, proj, goal, summary, started in rows:
+            blob = f"{goal or ''} {summary or ''}".lower()
+            score = sum(1 for t in terms if t in blob) / len(terms)
+            hits.append(Hit(
+                text=f"[{proj}] Session {sid} ({started}): "
+                     f"Goal: {goal or '(none)'} | Summary: {summary or '(none)'}",
+                source=self.name, ref=sid, score=round(score, 3)))
+        hits.sort(key=lambda h: h.score, reverse=True)
+        return hits[:limit]
 
     @staticmethod
     def format_timeline(sessions: List[Dict[str, Any]]) -> str:

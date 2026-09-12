@@ -4,7 +4,7 @@ All verification runs 100% offline without API keys, network access, or external
 
 ## Required Verification Checklist
 
-Before committing or pushing any code changes, all 5 test suites must pass:
+Before committing or pushing any code changes, all 7 test suites must pass:
 
 1. **Unit & Offline Integration Tests**:
    ```bash
@@ -24,7 +24,23 @@ Before committing or pushing any code changes, all 5 test suites must pass:
    ```
    Evaluates L2 multi-hop graph traversal accuracy (6/6 target) and latency (<1ms).
 
-4. **MCP Handshake & Tool Protocol**:
+4. **L3 Episodic History Evaluation**:
+   ```bash
+   python3 tests/eval_l3.py
+   ```
+   Evaluates L3 session-history recall (10/10 target) and latency (<1ms). Seeds a
+   multi-project session history, then checks term-level recall, project-scoped
+   timelines, and that the recap names the most recent session.
+
+5. **L4 Structural Code Graph Evaluation**:
+   ```bash
+   python3 tests/eval_l4.py
+   ```
+   Evaluates L4 graph accuracy (25/25 target) and latency (<1ms) against a fixture
+   repository whose call edges are true by construction, covering Python,
+   TypeScript and Go: callers, dependencies, blast radius, and structure.
+
+6. **MCP Handshake & Tool Protocol**:
    ```bash
    agi-integrate test
    ```
@@ -45,7 +61,7 @@ Before committing or pushing any code changes, all 5 test suites must pass:
    - `code_impact`
    - `code_index`
 
-5. **Comprehensive 12-Tier Production Stress Test**:
+7. **Comprehensive 12-Tier Production Stress Test**:
    ```bash
    python3 tests/stress_test.py
    ```

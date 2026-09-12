@@ -16,30 +16,40 @@
    - **Git Sync Engine** ([`sync.py`](../src/agi_memory/sync.py)): Automatic background push/pull to private GitHub repository.
    - **Cold-Start Seeder** ([`bootstrap.py`](../src/agi_memory/bootstrap.py)): Zero-touch memory bootstrapping from Git history, `README.md`, and code symbols.
    - **Developer Observability & MCP Server** ([`mcp_server.py`](../src/agi_memory/mcp_server.py)): Dispatches 15 native MCP tools and CLI curation commands (`log`, `inspect`, `delete`, `pin`, `unpin`, `blocks`, `timeline`, `structure`, `callers`, `dependencies`, `impact`, `index`, `bootstrap`).
+   - **Project Analysis** ([`analyze.py`](../src/agi_memory/analyze.py)): Deterministic repository facts (languages, manifests, package manager, build/test/run commands, test layout, schema surfaces, CI), exposed as `agi-memory analyze [--json]`.
+   - **Slash Command Emitter** ([`init_command.py`](../src/agi_memory/init_command.py)): Renders the `/agi-init` playbook into every assistant's native command format (Markdown, TOML, workflow, SKILL.md).
+   - **Connection Policy** ([`layers/base.py`](../src/agi_memory/layers/base.py)): `open_db()` is the only place SQLite connections are opened.
 
-3. **Code vs Data Decoupling**:
+3. **Single SQLite Connection Policy**:
+   - Every connection must be opened through `layers/base.py::open_db()`, which sets
+     WAL journaling and an explicit `busy_timeout` (`AGI_MEMORY_BUSY_TIMEOUT`, default 30s).
+   - Multiple agent processes write the same database concurrently; one bare
+     `sqlite3.connect()` reintroduces "database is locked" for every other process
+     sharing the file. A test in `tests/test_offline.py` enforces this.
+
+4. **Code vs Data Decoupling**:
    - The code repository must never store runtime databases (`*.db`, `*.sqlite`), user state (`promoted.json`), or secrets.
    - User memory data lives in `~/.agi-memory/` and `~/.agi-memory/vault/` (`~/.agent-memory/` supported as automatic backward-compatible fallback).
    - Framework updates (`git pull` / `pip install -U`) must never touch or alter existing memories.
 
-4. **Naming Standard**:
+5. **Naming Standard**:
    - Do not name any internal files or modules after third-party packages.
    - Always use `SessionLayer`, `GraphLayer`, `EpisodicLayer`, and `CodeLayer`.
 
-5. **Host-Native In-Flight LLM Synthesis**:
+6. **Host-Native In-Flight LLM Synthesis**:
    - Never require external LLM daemons, local weight downloads, or separate API keys.
    - Leverage the host assistant's active model in-flight during `memory_record` tool calls to extract L2 knowledge graph triples and identify superseded rules.
 
-6. **Bi-Temporal Knowledge Graph & Canonicalization**:
+7. **Bi-Temporal Knowledge Graph & Canonicalization**:
    - L2 graph edges record temporal validity (`is_active`, `valid_from`, `valid_until`, `superseded_by`).
    - Contradictory edges automatically get invalidated without destroying historical provenance.
    - Pure-SQL entity aliasing (`graph_aliases`) canonicalizes acronyms and synonyms (e.g. `FCM` -> `FirebaseCloudMessaging`) in <0.01ms without heavyweight embedding models.
 
-7. **Core Memory & Automated Lifecycle Hooks**:
+8. **Core Memory & Automated Lifecycle Hooks**:
    - Critical system invariants are stored as pinned Core Memory blocks (`core_memory_blocks`) prepended to recall queries.
    - Universal lifecycle hooks (`session-start`, `pre-compact`, `session-end`, `pre-commit`) proactively inject context, auto-promote memories before context compression, and sync the vault on session termination.
 
-8. **Verified Performance SLAs & Production Benchmarks**:
+9. **Verified Performance SLAs & Production Benchmarks**:
    - Tested and verified against authentic production scale (13,989 observations, 20.61 MB vault):
      - **L1 Working Recall**: <8ms p50, <16ms p95.
      - **L2 Recursive Graph Traversal**: <0.5ms (SQL CTEs, no vector/graph DB bloat).
@@ -51,6 +61,6 @@
      - **Vault Compaction Throughput**: >4,000 records / second.
      - **Zero Background Daemons**: 0 MB idle background RAM. Run `python3 tests/stress_test.py` to reproduce locally.
 
-9. **Zero-Touch Cold-Start Seeding**:
+10. **Zero-Touch Cold-Start Seeding**:
    - Newly attached repositories and workspaces must self-bootstrap initial working memories from Git history (`git log`) and `README.md` via `bootstrap.py` without external model calls.
    - Eliminates Day-1 empty vault churn while remaining strictly idempotent.

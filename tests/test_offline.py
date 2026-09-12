@@ -1142,19 +1142,28 @@ with tempfile.TemporaryDirectory() as doc_tmp:
     registered_tools = {t["name"] for t in mcp_server.TOOLS}
     assert len(registered_tools) == 15, f"Expected 15 tools in mcp_server, found {len(registered_tools)}"
 
-    readme_text = (repo_root / "README.md").read_text(encoding="utf-8")
+    # README is an index; the reference lives under docs/, so parity is checked
+    # against the whole published doc set rather than one file.
+    doc_files = [repo_root / "README.md", *sorted((repo_root / "docs").glob("*.md"))]
+    docs_text = "\n".join(f.read_text(encoding="utf-8") for f in doc_files)
     api_contracts_text = (repo_root / "rules" / "api-contracts.md").read_text(encoding="utf-8")
     for tool_name in registered_tools:
-        assert tool_name in readme_text, f"Tool '{tool_name}' not documented in README.md"
+        assert tool_name in docs_text, f"Tool '{tool_name}' not documented in README.md or docs/"
         assert tool_name in api_contracts_text, f"Tool '{tool_name}' not documented in rules/api-contracts.md"
 
-    # 15c. Relative link integrity in rules/architecture.md
-    arch_md = (repo_root / "rules" / "architecture.md").read_text(encoding="utf-8")
-    rel_links = re.findall(r"\[`[^`]+`\]\(([^)]+)\)", arch_md)
-    rules_dir = repo_root / "rules"
-    for link in rel_links:
-        target_path = (rules_dir / link).resolve()
-        assert target_path.exists(), f"Broken relative link in rules/architecture.md: {link} (resolved to {target_path})"
+    # Every guide the README indexes must exist, or the split silently loses a page.
+    for link in re.findall(r"\]\((docs/[^)#]+)\)", (repo_root / "README.md").read_text(encoding="utf-8")):
+        assert (repo_root / link).exists(), f"README links to missing {link}"
+
+    # 15c. Relative link integrity across rules/, context/ and docs/
+    link_re = re.compile(r"\]\((?!https?://|mailto:|#)([^)]+)\)")
+    for md in [repo_root / "rules" / "architecture.md", *sorted((repo_root / "docs").glob("*.md"))]:
+        for link in link_re.findall(md.read_text(encoding="utf-8")):
+            target = link.split("#")[0]
+            if not target:
+                continue
+            resolved = (md.parent / target).resolve()
+            assert resolved.exists(), f"Broken relative link in {md.name}: {link} (resolved to {resolved})"
 
     # 15d. Project namespace alias bridging (agent-memory <-> agi-memory)
     alias_db = Path(doc_tmp) / "alias_test.db"

@@ -201,6 +201,62 @@ def parse_python_code(content: str, rel_path: str) -> Tuple[List[Dict[str, Any]]
     return symbols, edges
 
 
+# Reserved words that look like calls: `if (x)`, `switch (y)`, `for (...)`.
+# Kept per-family rather than one blob so a Go keyword cannot mask a JS function.
+_CALL_KEYWORDS = {
+    "if", "for", "while", "switch", "catch", "return", "with", "do", "else",
+    "function", "await", "typeof", "instanceof", "new", "throw", "super",
+    "constructor", "defer", "go", "select", "range", "make", "len", "cap",
+    "append", "panic", "recover", "match", "loop", "unsafe", "impl", "fn",
+    "let", "const", "var", "print", "assert", "require", "import", "export",
+}
+
+_CALL_RE = re.compile(r"(?:\.\s*)?\b([A-Za-z_$][A-Za-z0-9_$]*)\s*\(")
+
+
+def extract_call_edges(lines: List[str], symbols: List[Dict[str, Any]],
+                       rel_path: str) -> List[Dict[str, Any]]:
+    """Attribute call sites to the enclosing function for the regex parsers.
+
+    The AST parser resolves scope properly; the regex parsers only know where
+    each symbol starts, so a call is attributed to the nearest function
+    declared above it. That is exact for flat code and approximate for nested
+    closures, which is the accuracy the regex tier already offers elsewhere.
+    Without this, code_callers/code_dependencies/code_impact answer only for
+    Python while claiming to cover every indexed language.
+    """
+    starts = sorted(
+        ((sym["start_line"], sym.get("qualified_name") or sym["name"], sym["name"])
+         for sym in symbols if sym.get("kind") in ("function", "method")),
+        key=lambda t: t[0],
+    )
+    if not starts:
+        return []
+
+    edges: List[Dict[str, Any]] = []
+    seen = set()
+    pos = 0
+    current = None
+    for idx, line in enumerate(lines, start=1):
+        while pos < len(starts) and starts[pos][0] <= idx:
+            current = starts[pos]
+            pos += 1
+        if current is None or idx == current[0]:
+            continue  # the declaration line itself is not a call site
+        code = line.split("//")[0].split("#")[0]
+        for match in _CALL_RE.finditer(code):
+            callee = match.group(1)
+            if callee in _CALL_KEYWORDS or callee == current[2]:
+                continue
+            key = (current[1], callee)
+            if key in seen:
+                continue
+            seen.add(key)
+            edges.append({"source": current[1], "relation": "CALLS",
+                          "target": callee, "line": idx})
+    return edges
+
+
 def parse_js_ts_code(content: str, rel_path: str) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
     """Fast streaming regex parser for JavaScript and TypeScript."""
     symbols: List[Dict[str, Any]] = []
@@ -305,6 +361,7 @@ def parse_js_ts_code(content: str, rel_path: str) -> Tuple[List[Dict[str, Any]],
         if stripped.endswith("}") and current_class and line.startswith("}"):
             current_class = None
 
+    edges.extend(extract_call_edges(lines, symbols, rel_path))
     return symbols, edges
 
 
@@ -360,6 +417,7 @@ def parse_go_code(content: str, rel_path: str) -> Tuple[List[Dict[str, Any]], Li
             })
             edges.append({"source": recv_clean or rel_path, "relation": "DEFINES", "target": qname, "line": idx})
 
+    edges.extend(extract_call_edges(lines, symbols, rel_path))
     return symbols, edges
 
 
@@ -410,6 +468,7 @@ def parse_rust_code(content: str, rel_path: str) -> Tuple[List[Dict[str, Any]], 
             })
             edges.append({"source": rel_path, "relation": "DEFINES", "target": fname, "line": idx})
 
+    edges.extend(extract_call_edges(lines, symbols, rel_path))
     return symbols, edges
 
 
@@ -470,6 +529,7 @@ def parse_dart_code(content: str, rel_path: str) -> Tuple[List[Dict[str, Any]], 
         if stripped.endswith("}") and current_class and line.startswith("}"):
             current_class = None
 
+    edges.extend(extract_call_edges(lines, symbols, rel_path))
     return symbols, edges
 
 
@@ -894,7 +954,15 @@ class CodeLayer(MemoryLayer):
                 SELECT e.source_symbol, e.relation, e.target_symbol, e.file_path, e.line_number, c.depth + 1,
                        e.source_symbol || ' -[' || e.relation || ']-> ' || c.path
                 FROM code_edges e
-                JOIN callers_cte c ON e.target_symbol = c.symbol
+                -- Qualified vs bare names must still connect: a method is
+                -- recorded as AuthService.authenticate, while its call sites
+                -- reference bare authenticate. Strict equality here truncated
+                -- every transitive chain at the first method boundary.
+                JOIN callers_cte c ON (
+                    e.target_symbol = c.symbol
+                    OR c.symbol LIKE '%.' || e.target_symbol
+                    OR e.target_symbol LIKE '%.' || c.symbol
+                )
                 WHERE {rec_proj_clause}
                   AND c.depth < ?
                   AND INSTR(c.path, e.source_symbol) = 0
@@ -949,7 +1017,12 @@ class CodeLayer(MemoryLayer):
                 SELECT e.source_symbol, e.relation, e.target_symbol, e.file_path, e.line_number, d.depth + 1,
                        d.path || ' -[' || e.relation || ']-> ' || e.target_symbol
                 FROM code_edges e
-                JOIN deps_cte d ON e.source_symbol = d.target
+                -- Same qualified/bare reconciliation as callers_cte, outbound.
+                JOIN deps_cte d ON (
+                    e.source_symbol = d.target
+                    OR d.target LIKE '%.' || e.source_symbol
+                    OR e.source_symbol LIKE '%.' || d.target
+                )
                 WHERE {rec_proj_clause}
                   AND d.depth < ?
                   AND INSTR(d.path, e.target_symbol) = 0

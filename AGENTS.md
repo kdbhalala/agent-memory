@@ -40,6 +40,8 @@ When operating in this codebase:
 - **Memory Protocol**: [`rules/memory-discipline.md`](rules/memory-discipline.md).
 - **API Contracts**: [`rules/api-contracts.md`](rules/api-contracts.md).
 - **Testing & QA**: [`rules/testing-qa.md`](rules/testing-qa.md).
+- **User Documentation**: [`docs/`](docs/) — installation, pillars, architecture,
+  assistants, CLI, Python API, sync, benchmarks, testing. `README.md` is the index.
 - **Domain Glossary**: [`context/domain-glossary.md`](context/domain-glossary.md).
 - **Data Model**: [`context/data-model.md`](context/data-model.md).
 - **Runbook**: [`context/runbook.md`](context/runbook.md).
@@ -48,7 +50,8 @@ When operating in this codebase:
 
 Always run before committing:
 ```bash
-python3 tests/test_offline.py && python3 tests/eval_l1.py && python3 tests/eval_l2.py && agi-integrate test
+python3 tests/test_offline.py && python3 tests/eval_l1.py && python3 tests/eval_l2.py \
+  && python3 tests/eval_l3.py && python3 tests/eval_l4.py && agi-integrate test
 python3 tests/chaos_test.py   # adversarial: hostile input, corruption, concurrency
 python3 tests/stress_test.py
 ```

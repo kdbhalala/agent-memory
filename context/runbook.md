@@ -141,3 +141,19 @@ Inspect what coding assistants accomplished in recent sessions:
 # View recent session timeline and summaries
 agi-memory timeline -n 10 --project agi-memory
 ```
+
+## Initializing a Project
+
+```bash
+cd your-project
+agi-integrate init .          # wires .mcp.json, per-tool adapters, hooks,
+                              # and the /agi-init slash command (9 formats)
+agi-memory analyze            # optional: see the detected stack and commands
+```
+
+Then run `/agi-init` inside your assistant. It reads the codebase and writes
+`rules/architecture.md`, `rules/testing-qa.md`, `context/data-model.md`,
+`context/runbook.md`, and the `AGENTS.md` / `CLAUDE.md` index from what it finds.
+
+Use `agi-integrate init . --force` to overwrite existing files, and
+`--scope user` to install the slash command globally instead of per-project.
