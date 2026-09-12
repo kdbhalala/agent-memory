@@ -681,9 +681,9 @@ class CodeLayer(MemoryLayer):
         root = Path(root_dir) if root_dir else Path.cwd()
 
         try:
-            rel_path = str(p.relative_to(root))
+            rel_path = p.relative_to(root).as_posix()
         except ValueError:
-            rel_path = str(p)
+            rel_path = Path(p).as_posix()
 
         ext = p.suffix.lower()
         lang = SUPPORTED_EXTENSIONS.get(ext)
@@ -889,7 +889,7 @@ class CodeLayer(MemoryLayer):
         con = self._get_con(mode="ro")
         cur = con.cursor()
 
-        target_str = str(target_path).strip()
+        target_str = str(target_path).strip().replace("\\", "/")
         if target_str in (".", "", "./"):
             # Whole project structure
             sql = """

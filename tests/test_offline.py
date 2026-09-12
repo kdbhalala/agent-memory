@@ -190,6 +190,22 @@ with tempfile.TemporaryDirectory() as tmp_dir:
             del os.environ[env_var]
         assert str(tool.get_config_path("user")) == base_cfg, f"{tname}: env leak"
 
+# code graph paths are stored POSIX-style so an index built on Windows answers
+# the same "src/foo.py" query as one built on Linux, and either separator works
+with tempfile.TemporaryDirectory() as tmp_dir:
+    _repo = Path(tmp_dir) / "r"
+    (_repo / "pkg").mkdir(parents=True)
+    (_repo / "pkg" / "mod.py").write_text("def alpha():\n    return 1\n")
+    from agi_memory.layers.code_layer import CodeLayer as _CL
+    _cl = _CL(db_path=Path(tmp_dir) / "cg.db", project="pathproj")
+    _cl.index_directory(_repo, project="pathproj")
+    _all = _cl.get_structure(".", project="pathproj")
+    assert _all, "nothing indexed"
+    for _row in _all:
+        assert "\\" not in _row["file_path"], f"non-posix path stored: {_row['file_path']}"
+    assert _cl.get_structure("pkg/mod.py", project="pathproj"), "posix path lookup failed"
+    assert _cl.get_structure("pkg\\mod.py", project="pathproj"), "windows path lookup failed"
+
 # the code parser must survive input no version of ast agrees on:
 # NUL bytes are a ValueError on 3.10 and a SyntaxError from 3.12 on
 import ast as _ast
