@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import json
 import re
+import functools
 import sqlite3
 import os
 from pathlib import Path
@@ -57,12 +58,18 @@ _PREFERRED_TOKENIZE = "porter unicode61"
 _FALLBACK_TOKENIZE = "unicode61"
 
 
-def _supported_tokenizer(con: sqlite3.Connection) -> str:
-    """Return the best FTS5 tokenizer this SQLite build actually supports."""
+@functools.lru_cache(maxsize=1)
+def _supported_tokenizer() -> str:
+    """Best FTS5 tokenizer this SQLite build supports, probed once per process.
+
+    Probing happens against an in-memory database, never the shared one: doing
+    CREATE/DROP on the real file to answer a static question raced with other
+    agent processes and failed their queries with "vtable constructor failed".
+    """
     try:
-        con.execute("CREATE VIRTUAL TABLE IF NOT EXISTS _tok_probe "
-                    f"USING fts5(x, tokenize='{_PREFERRED_TOKENIZE}')")
-        con.execute("DROP TABLE IF EXISTS _tok_probe")
+        probe = sqlite3.connect(":memory:")
+        probe.execute(f"CREATE VIRTUAL TABLE t USING fts5(x, tokenize='{_PREFERRED_TOKENIZE}')")
+        probe.close()
         return _PREFERRED_TOKENIZE
     except sqlite3.Error:
         return _FALLBACK_TOKENIZE
@@ -104,18 +111,27 @@ class SessionLayer(MemoryLayer):
             return
         try:
             con = open_db(self.db_path)
-            tokenize = _supported_tokenizer(con)
-            if _fts_needs_rebuild(con, tokenize):
-                con.execute("DROP TABLE IF EXISTS observations_fts")
-                con.execute(f"""
-                    CREATE VIRTUAL TABLE observations_fts USING fts5(
-                        title, subtitle, facts, narrative, concepts,
-                        content='observations', content_rowid='id',
-                        tokenize='{tokenize}'
-                    )
-                """)
-                con.execute("INSERT INTO observations_fts(observations_fts) VALUES('rebuild')")
+            tokenize = _supported_tokenizer()
+            if not _fts_needs_rebuild(con, tokenize):
+                con.close()
+                return
+            # Exclusive for the whole drop/create/rebuild: a reader that opens
+            # the vtable midway through gets "vtable constructor failed".
+            con.execute("BEGIN IMMEDIATE")
+            try:
+                if _fts_needs_rebuild(con, tokenize):  # re-check under the lock
+                    con.execute("DROP TABLE IF EXISTS observations_fts")
+                    con.execute(f"""
+                        CREATE VIRTUAL TABLE observations_fts USING fts5(
+                            title, subtitle, facts, narrative, concepts,
+                            content='observations', content_rowid='id',
+                            tokenize='{tokenize}'
+                        )
+                    """)
+                    con.execute("INSERT INTO observations_fts(observations_fts) VALUES('rebuild')")
                 con.commit()
+            except sqlite3.Error:
+                con.rollback()
             con.close()
         except sqlite3.Error:
             # A corrupt or locked database must not break construction; reads
@@ -136,7 +152,7 @@ class SessionLayer(MemoryLayer):
                 generated_by_model TEXT, relevance_count INT, sync_rev TEXT
             )
         """)
-        tokenize = _supported_tokenizer(con)
+        tokenize = _supported_tokenizer()
         rebuilt = _fts_needs_rebuild(con, tokenize)
         if rebuilt:
             # Tokenizer changed since this database was created. The FTS table is

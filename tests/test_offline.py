@@ -286,8 +286,14 @@ _src_root = Path(__file__).resolve().parent.parent / "src" / "agi_memory"
 for _f in list((_src_root / "layers").glob("*.py")) + [_src_root / "vault.py"]:
     if _f.name == "base.py":
         continue
-    assert "sqlite3.connect(" not in _f.read_text(encoding="utf-8"), \
-        f"{_f.name} opens SQLite directly; use open_db() so WAL/busy_timeout apply"
+    # A throwaway :memory: database is exempt: it is never shared between
+    # processes, so WAL and busy_timeout are meaningless for it. Every
+    # connection to a real file must still go through open_db().
+    _direct = [ln for ln in _f.read_text(encoding="utf-8").splitlines()
+               if "sqlite3.connect(" in ln and '":memory:"' not in ln]
+    assert not _direct, \
+        f"{_f.name} opens a file-backed SQLite connection directly; use open_db() " \
+        f"so WAL/busy_timeout apply: {_direct[0].strip()}"
 
 # analyze reads real project facts, never placeholder prose
 from agi_memory import analyze as _an
