@@ -50,3 +50,17 @@ While most AI memory solutions benchmark against 10–50 synthetic toy records, 
 *Reproduce locally against your real dataset with `python3 tests/stress_test.py`.*
 
 ---
+
+## How RSS is measured
+
+The memory figures above are the **MCP server process alone**, sampled after a
+JSON-RPC handshake and one `memory_recall` — that is what a coding assistant
+actually pays to keep memory available. Reproduce it with:
+
+```bash
+python3 tests/stress_test.py   # reports "MCP Server RSS"
+```
+
+The same run also prints "Stress Harness Peak RSS", which is much larger (~140MB)
+and is **not** the server: it is the test process itself, which loads every
+layer, seeds a synthetic corpus and drives 100-way concurrency. Don't quote it.

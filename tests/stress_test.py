@@ -70,8 +70,42 @@ REAL_QUERIES = [
 
 
 def get_process_memory_mb() -> float:
+    """PEAK RSS of THIS stress harness, not of the MCP server.
+
+    ru_maxrss is a high-water mark and this process loads every layer, seeds a
+    synthetic corpus and runs 100-way concurrency -- so it reads far above what
+    an agent session actually costs. Use measure_server_rss() for the number
+    that belongs in the docs.
+    """
     rusage = resource.getrusage(resource.RUSAGE_SELF)
     return rusage.ru_maxrss / (1024 * 1024)
+
+
+def measure_server_rss() -> float:
+    """RSS of the MCP server process alone, after a handshake and one recall.
+
+    This is what a coding assistant actually pays to keep memory available, and
+    it is the figure quoted in docs/benchmarks.md.
+    """
+    import json
+    import subprocess
+    server = Path(__file__).resolve().parent.parent / "src" / "agi_memory" / "mcp_server.py"
+    proc = subprocess.Popen([sys.executable, str(server)], stdin=subprocess.PIPE,
+                            stdout=subprocess.PIPE, text=True)
+    try:
+        for msg in ({"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}},
+                    {"jsonrpc": "2.0", "id": 2, "method": "tools/call",
+                     "params": {"name": "memory_recall", "arguments": {"query": "authentication"}}}):
+            proc.stdin.write(json.dumps(msg) + "\n")
+            proc.stdin.flush()
+            proc.stdout.readline()
+        out = subprocess.run(["ps", "-o", "rss=", "-p", str(proc.pid)],
+                             capture_output=True, text=True).stdout.strip()
+        return int(out) / 1024 if out.isdigit() else float("nan")
+    except Exception:
+        return float("nan")
+    finally:
+        proc.terminate()
 
 
 def seed_synthetic_db(db_path: Path, count: int = 1000) -> None:
@@ -136,7 +170,7 @@ def run_stress_test(db_override: Path | None = None, vault_override: Path | None
     print(f"Knowledge Graph : {total_nodes:,} nodes | {total_edges:,} edges ({active_edges:,} active)")
     print(f"Entity Aliases  : {total_aliases:,} canonicalized synonyms")
     initial_ram = get_process_memory_mb()
-    print(f"Initial Memory  : {initial_ram:.2f} MB RSS (Zero background daemons)")
+    print(f"Harness Memory  : {initial_ram:.2f} MB peak RSS (this test process, not the server)")
     print("-" * 80)
 
     # 1. L1 Working Memory Latency
@@ -412,7 +446,10 @@ def run_stress_test(db_override: Path | None = None, vault_override: Path | None
     print(f"  session-start Hook Overhead      : {avg_start:.2f} ms")
     if compact_throughput:
         print(f"  Vault Compaction Throughput      : {compact_throughput:,.0f} records / sec")
-    print(f"  Memory Footprint (RSS)           : {final_ram:.2f} MB (Zero background daemons)")
+    server_rss = measure_server_rss()
+    if server_rss == server_rss:  # not NaN
+        print(f"  MCP Server RSS (what agents pay) : {server_rss:.2f} MB (zero background daemons)")
+    print(f"  Stress Harness Peak RSS          : {final_ram:.2f} MB (this test process, not the server)")
     print("=" * 80)
 
     if temp_seeded and temp_dir_handle:

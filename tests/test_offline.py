@@ -190,6 +190,20 @@ with tempfile.TemporaryDirectory() as tmp_dir:
             del os.environ[env_var]
         assert str(tool.get_config_path("user")) == base_cfg, f"{tname}: env leak"
 
+import re as _re_mod
+# Homebrew formulae must track the packaged version. They shipped a v0.2.0
+# sha256 against a v0.4.0 tarball for two releases because nothing checked.
+_pyproject = (Path(__file__).resolve().parent.parent / "pyproject.toml").read_text(encoding="utf-8")
+_pkg_version = _re_mod.search(r'^version\s*=\s*"([^"]+)"', _pyproject, _re_mod.M).group(1)
+for _formula in sorted((Path(__file__).resolve().parent.parent / "Formula").glob("*.rb")):
+    _text = _formula.read_text(encoding="utf-8")
+    assert f"tags/v{_pkg_version}.tar.gz" in _text, \
+        f"{_formula.name} does not point at v{_pkg_version}; run packaging/update_formula.py"
+    assert _re_mod.search(rf'assert_match "[a-z-]+ {_re_mod.escape(_pkg_version)}"', _text), \
+        f"{_formula.name} version assertion is stale; run packaging/update_formula.py"
+    _sha = _re_mod.search(r'sha256 "([0-9a-f]{64})"', _text)
+    assert _sha, f"{_formula.name} has no sha256"
+
 # an existing database built with the old tokenizer must be migrated on open,
 # or every upgraded user keeps querying the old index and never sees the fix
 with tempfile.TemporaryDirectory() as tmp_dir:
