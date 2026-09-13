@@ -46,6 +46,40 @@ STOPWORDS = frozenset(
 )
 
 
+# FTS5 index schema version. Bump when the tokenizer changes so existing
+# databases rebuild instead of silently serving results from the old index.
+FTS_SCHEMA_VERSION = 2
+
+# Porter stemming makes "authenticate" find "authentication" -- measured at ~0%
+# recall without it. Older SQLite builds may not have it, so we degrade to the
+# default tokenizer rather than failing to create the index at all.
+_PREFERRED_TOKENIZE = "porter unicode61"
+_FALLBACK_TOKENIZE = "unicode61"
+
+
+def _supported_tokenizer(con: sqlite3.Connection) -> str:
+    """Return the best FTS5 tokenizer this SQLite build actually supports."""
+    try:
+        con.execute("CREATE VIRTUAL TABLE IF NOT EXISTS _tok_probe "
+                    f"USING fts5(x, tokenize='{_PREFERRED_TOKENIZE}')")
+        con.execute("DROP TABLE IF EXISTS _tok_probe")
+        return _PREFERRED_TOKENIZE
+    except sqlite3.Error:
+        return _FALLBACK_TOKENIZE
+
+
+def _fts_needs_rebuild(con: sqlite3.Connection, tokenize: str) -> bool:
+    """True when the stored index was built with a different tokenizer."""
+    try:
+        row = con.execute("SELECT sql FROM sqlite_master WHERE type='table' "
+                          "AND name='observations_fts'").fetchone()
+    except sqlite3.Error:
+        return False
+    if not row or not row[0]:
+        return False
+    return f"tokenize='{tokenize}'" not in row[0]
+
+
 class SessionLayer(MemoryLayer):
     name = "session"
 
@@ -56,6 +90,37 @@ class SessionLayer(MemoryLayer):
         self.project = project
         self.db_path = Path(db_path) if db_path else get_default_db()
         self.on_record = on_record
+        self._migrate_fts_if_needed()
+
+
+    def _migrate_fts_if_needed(self) -> None:
+        """Upgrade an existing database's FTS index when the tokenizer changes.
+
+        _init_db only ran for brand-new databases, so without this every
+        existing user would keep querying an index built with the old matching
+        rules and never see the improvement.
+        """
+        if not self.db_path.exists():
+            return
+        try:
+            con = open_db(self.db_path)
+            tokenize = _supported_tokenizer(con)
+            if _fts_needs_rebuild(con, tokenize):
+                con.execute("DROP TABLE IF EXISTS observations_fts")
+                con.execute(f"""
+                    CREATE VIRTUAL TABLE observations_fts USING fts5(
+                        title, subtitle, facts, narrative, concepts,
+                        content='observations', content_rowid='id',
+                        tokenize='{tokenize}'
+                    )
+                """)
+                con.execute("INSERT INTO observations_fts(observations_fts) VALUES('rebuild')")
+                con.commit()
+            con.close()
+        except sqlite3.Error:
+            # A corrupt or locked database must not break construction; reads
+            # degrade to no hits, per the existing robustness invariant.
+            pass
 
     @staticmethod
     def _init_db(db_path: Path) -> None:
@@ -71,12 +136,28 @@ class SessionLayer(MemoryLayer):
                 generated_by_model TEXT, relevance_count INT, sync_rev TEXT
             )
         """)
-        con.execute("""
+        tokenize = _supported_tokenizer(con)
+        rebuilt = _fts_needs_rebuild(con, tokenize)
+        if rebuilt:
+            # Tokenizer changed since this database was created. The FTS table is
+            # a derived index over `observations`, so dropping and rebuilding it
+            # loses nothing -- and leaving it stale would silently serve results
+            # from the old matching rules forever.
+            con.execute("DROP TABLE IF EXISTS observations_fts")
+        con.execute(f"""
             CREATE VIRTUAL TABLE IF NOT EXISTS observations_fts USING fts5(
                 title, subtitle, facts, narrative, concepts,
-                content='observations', content_rowid='id'
+                content='observations', content_rowid='id',
+                tokenize='{tokenize}'
             )
         """)
+        if rebuilt:
+            # An external-content FTS table starts empty; repopulate from
+            # `observations`, which is the real data.
+            try:
+                con.execute("INSERT INTO observations_fts(observations_fts) VALUES('rebuild')")
+            except sqlite3.Error:
+                pass
         con.execute("""
             CREATE TRIGGER IF NOT EXISTS observations_ai AFTER INSERT ON observations BEGIN
                 INSERT INTO observations_fts(rowid, title, subtitle, facts, narrative, concepts)

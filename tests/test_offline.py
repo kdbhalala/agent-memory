@@ -190,6 +190,37 @@ with tempfile.TemporaryDirectory() as tmp_dir:
             del os.environ[env_var]
         assert str(tool.get_config_path("user")) == base_cfg, f"{tname}: env leak"
 
+# an existing database built with the old tokenizer must be migrated on open,
+# or every upgraded user keeps querying the old index and never sees the fix
+with tempfile.TemporaryDirectory() as tmp_dir:
+    from agi_memory.layers.session_layer import SessionLayer as _SL
+    _db = Path(tmp_dir) / "mig.db"
+    _l1 = _SL(db_path=_db, project="migproj")
+    _l1.record("Migrated authentication to short-lived JWT tokens.", title="Auth", project="migproj")
+    _con = sqlite3.connect(_db)
+    _con.execute("DROP TABLE observations_fts")
+    _con.execute("""CREATE VIRTUAL TABLE observations_fts USING fts5(
+        title, subtitle, facts, narrative, concepts,
+        content='observations', content_rowid='id', tokenize='unicode61')""")
+    _con.execute("INSERT INTO observations_fts(observations_fts) VALUES('rebuild')")
+    _con.commit()
+    _con.close()
+    _l2 = _SL(db_path=_db, project="migproj")   # construction must migrate
+    _con = sqlite3.connect(_db)
+    _sql = _con.execute("SELECT sql FROM sqlite_master WHERE name='observations_fts'").fetchone()[0]
+    _rows = _con.execute("SELECT count(*) FROM observations_fts").fetchone()[0]
+    _con.close()
+    assert "porter" in _sql, f"FTS index not migrated to stemming tokenizer: {_sql}"
+    assert _rows == 1, f"rebuilt index not repopulated: {_rows} rows"
+    assert _l2.search("authentication", limit=3), "exact term lost after migration"
+    assert _l2.search("authenticate", limit=3), "stemming not active after migration"
+
+# identifier folding is a FALLBACK for the code graph: it must bridge naming
+# conventions without ever outranking an exact symbol match
+from agi_memory.layers.code_layer import fold_identifier as _fold
+assert _fold("getUserById") == _fold("get_user_by_id") == _fold("get-user-by-id") == "getuserbyid"
+assert _fold("AuthService") != _fold("authservices")
+
 # code graph paths are stored POSIX-style so an index built on Windows answers
 # the same "src/foo.py" query as one built on Linux, and either separator works
 with tempfile.TemporaryDirectory() as tmp_dir:

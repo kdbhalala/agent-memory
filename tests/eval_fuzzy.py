@@ -83,6 +83,23 @@ PROBES = [
     }),
 ]
 
+# (query, a distinctive phrase that must appear in the TOP hit)
+# Recall without precision is worthless: a matcher that returns everything scores
+# 100% recall and is useless. The budget below is asserted before and after any
+# matching change.
+PRECISION_PROBES = [
+    ("authentication JWT", "JWT"),
+    ("Redis expiration", "Redis"),
+    ("webhook backoff", "backoff"),
+    ("billing table", "billing"),
+    ("Kubernetes rolling update", "Kubernetes"),
+    ("environment settings module", "settings"),
+]
+
+# Council-mandated budget, fixed before the matching work started:
+#   precision must not regress at all. Recall may rise; precision may not fall.
+PRECISION_BUDGET = 1.0
+
 CODE_FIXTURE = {
     # Only snake_case is defined. Querying the camelCase spelling must therefore
     # be a real fuzzy lookup, not a hit on a different symbol that happens to exist.
@@ -211,6 +228,19 @@ def main():
                 results["L4 code graph"][category][0] += hit
                 results["L4 code graph"][category][1] += 1
 
+        print("\nPrecision — is the RIGHT memory ranked first?\n")
+        prec_hits = 0
+        for query, expected_in_top in PRECISION_PROBES:
+            hits = l1.search(query, limit=3)
+            top = hits[0].text if hits else ""
+            ok = expected_in_top.lower() in top.lower()
+            prec_hits += ok
+            print(f"{'PASS' if ok else 'FAIL'} :: {query:<32} -> "
+                  f"{(top[:58] + '...') if top else '(no hits)'}")
+        precision = prec_hits / len(PRECISION_PROBES)
+        print(f"\nPrecision: {prec_hits}/{len(PRECISION_PROBES)} = {precision:.0%} "
+              f"(budget: {PRECISION_BUDGET:.0%}, must not regress)")
+
     categories = ["morphological", "typo", "identifier", "abbreviation", "paraphrase"]
     print("\nRecall on degraded queries (exact form verified to hit first)\n")
     header = f"{'Layer':<16}" + "".join(f"{c[:13]:>15}" for c in categories)
@@ -245,7 +275,11 @@ def main():
     overall_elig = sum(e for _, e in totals.values())
     print(f"Baseline degraded-query recall: {overall_hits}/{overall_elig} "
           f"= {overall_hits / overall_elig:.0%}\n")
-    print("Report-only: this measures the gap, it does not gate CI.")
+    if precision < PRECISION_BUDGET:
+        print(f"\nPRECISION REGRESSION: {precision:.0%} < budget {PRECISION_BUDGET:.0%}. "
+              f"A looser matcher that returns the wrong memory is worse than a miss.")
+        sys.exit(1)
+    print("Recall is report-only; precision is enforced against the budget.")
 
 
 if __name__ == "__main__":

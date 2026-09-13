@@ -55,6 +55,7 @@ jobs:
           python tests/eval_l2.py
           python tests/eval_l3.py
           python tests/eval_l4.py
+          python tests/eval_fuzzy.py
 
       - name: Run adversarial robustness suite
         run: |

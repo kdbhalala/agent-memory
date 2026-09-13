@@ -566,6 +566,17 @@ def _dispatch_parser(content: str, rel_path: str, language: str) -> Tuple[List[D
 # CodeLayer Implementation
 # ============================================================================
 
+def fold_identifier(name: str) -> str:
+    """Collapse an identifier to a comparable form: getUserById, get_user_by_id
+    and get-user-by-id all fold to "getuserbyid".
+
+    Agents query symbols by the spelling of whichever language they are looking
+    at, and a polyglot repo stores both. Used only as a FALLBACK after exact
+    lookup misses, so folding can never outrank an exact symbol match.
+    """
+    return re.sub(r"[^a-z0-9]", "", str(name).lower())
+
+
 class CodeLayer(MemoryLayer):
     """Native SQLite Structural Code Graph layer."""
     name = "code"
@@ -576,9 +587,17 @@ class CodeLayer(MemoryLayer):
         self._init_db()
 
     def _get_con(self, mode: str = "rw") -> sqlite3.Connection:
-        if mode == "ro":
-            return open_db(self.db_path, readonly=True)
-        return open_db(self.db_path)
+        con = open_db(self.db_path, readonly=True) if mode == "ro" else open_db(self.db_path)
+        try:
+            con.create_function("fold_ident", 1, fold_identifier, deterministic=True)
+        except (sqlite3.Error, TypeError):
+            # deterministic= needs SQLite 3.8.3+/Python 3.8+; without the
+            # function the folded fallback simply never matches.
+            try:
+                con.create_function("fold_ident", 1, fold_identifier)
+            except sqlite3.Error:
+                pass
+        return con
 
     def _init_db(self) -> None:
         """Create code graph schema, FTS5 virtual tables, and indexes."""
@@ -982,6 +1001,23 @@ class CodeLayer(MemoryLayer):
 
         cur.execute(query, args)
         rows = cur.fetchall()
+        if not rows:
+            # Fallback: the caller may have spelled the symbol in another
+            # language's convention (getUserById vs get_user_by_id).
+            folded_query = query.replace(
+                "AND (target_symbol = ? OR target_symbol LIKE ?)",
+                "AND (fold_ident(target_symbol) = ? OR fold_ident(target_symbol) LIKE ?)")
+            folded_args = list(args)
+            for i, a in enumerate(folded_args):
+                if a == symbol_name:
+                    folded_args[i] = fold_identifier(symbol_name)
+                elif a == f"%.{symbol_name}":
+                    folded_args[i] = f"%{fold_identifier(symbol_name)}"
+            try:
+                cur.execute(folded_query, folded_args)
+                rows = cur.fetchall()
+            except sqlite3.Error:
+                rows = []
         con.close()
 
         results = []
