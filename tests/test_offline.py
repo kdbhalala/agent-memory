@@ -207,6 +207,44 @@ assert _stem("deployment") != _stem("dependency"), "unrelated words collapsed"
 # stems that equal their source add nothing and are dropped
 assert "retry" not in _stems(["retry"]) or _stem("retry") != "retry"
 
+# Two machines both recording between syncs must converge, not diverge.
+# Before the union merge policy this produced a rebase conflict that sync()
+# aborted and mislabelled "pull_offline", leaving both vaults permanently
+# out of step with no error surfaced.
+import subprocess as _sp
+from agi_memory.sync import ensure_merge_attributes as _ensure_attrs
+def _git(*a, cwd):
+    return _sp.run(["git", *a], cwd=cwd, capture_output=True, text=True)
+with tempfile.TemporaryDirectory() as tmp_dir:
+    _base = Path(tmp_dir)
+    _remote = _base / "remote.git"
+    _git("init", "-q", "--bare", str(_remote), cwd=_base)
+    for _m in ("m1", "m2"):
+        _sp.run(["git", "clone", "-q", str(_remote), str(_base / _m)], capture_output=True)
+        _git("config", "user.email", "t@t", cwd=_base / _m)
+        _git("config", "user.name", "t", cwd=_base / _m)
+    _d1 = _base / "m1"
+    assert _ensure_attrs(_d1), "merge attributes not installed"
+    assert "merge=union" in (_d1 / ".gitattributes").read_text()
+    (_d1 / "observations.jsonl").write_text('{"id": 1}\n')
+    _git("add", "-A", cwd=_d1); _git("commit", "-qm", "init", cwd=_d1)
+    _git("push", "-q", "origin", "HEAD:main", cwd=_d1)
+    _git("fetch", "-q", "origin", cwd=_base / "m2")
+    _git("checkout", "-qB", "main", "origin/main", cwd=_base / "m2")
+    for _m, _line in (("m1", '{"id": 2}'), ("m2", '{"id": 3}')):
+        _f = _base / _m / "observations.jsonl"
+        _f.write_text(_f.read_text() + _line + "\n")
+        _git("add", "-A", cwd=_base / _m); _git("commit", "-qm", _m, cwd=_base / _m)
+    _git("push", "-q", "origin", "HEAD:main", cwd=_base / "m1")
+    _pull = _git("pull", "--rebase", "origin", "main", cwd=_base / "m2")
+    assert _pull.returncode == 0, f"concurrent vault writes still conflict: {_pull.stderr[-160:]}"
+    assert _git("push", "origin", "HEAD:main", cwd=_base / "m2").returncode == 0, "push rejected"
+    _git("pull", "-q", "--rebase", "origin", "main", cwd=_base / "m1")
+    _lines1 = (_base / "m1" / "observations.jsonl").read_text().splitlines()
+    _lines2 = (_base / "m2" / "observations.jsonl").read_text().splitlines()
+    assert sorted(_lines1) == sorted(_lines2) == ['{"id": 1}', '{"id": 2}', '{"id": 3}'], \
+        f"vaults diverged: {_lines1} vs {_lines2}"
+
 # Homebrew formulae must track the packaged version. They shipped a v0.2.0
 # sha256 against a v0.4.0 tarball for two releases because nothing checked.
 _pyproject = (Path(__file__).resolve().parent.parent / "pyproject.toml").read_text(encoding="utf-8")

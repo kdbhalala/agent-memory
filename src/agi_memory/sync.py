@@ -155,6 +155,32 @@ def _ensure_git_identity(vault_dir: Path) -> None:
         _run_git(["config", "user.email", "agent-memory@local"], cwd=vault_dir)
 
 
+# Append-only JSONL is the one file shape where "take both sides" is always
+# correct: two machines adding different records is not a conflict, it is the
+# expected case. Without this, every concurrent pair of writes produced a
+# rebase conflict that sync() then abandoned, leaving the two vaults
+# permanently divergent with no error surfaced.
+#
+# `union` is a built-in git merge driver, so this needs no external config.
+# It is ONLY safe while the vault stays append-only -- a file whose lines are
+# edited in place would silently keep both versions of an edited line.
+GITATTRIBUTES = "*.jsonl merge=union\n*.json  merge=union\n"
+
+
+def ensure_merge_attributes(v_dir: Path) -> bool:
+    """Install the union merge policy for vault records. Idempotent."""
+    attrs = v_dir / ".gitattributes"
+    try:
+        existing = attrs.read_text(encoding="utf-8") if attrs.exists() else ""
+        if "merge=union" in existing:
+            return False
+        attrs.write_text((existing.rstrip() + "\n" if existing.strip() else "") + GITATTRIBUTES,
+                         encoding="utf-8")
+        return True
+    except OSError:
+        return False
+
+
 def init_git_repo(vault_dir: Path | str | None = None) -> tuple[bool, str]:
     """Initialize a git repository in vault_dir if not already present."""
     v_dir = init_vault(vault_dir)
@@ -169,6 +195,7 @@ def init_git_repo(vault_dir: Path | str | None = None) -> tuple[bool, str]:
             _run_git(["branch", "-M", "main"], cwd=v_dir)
 
     _ensure_git_identity(v_dir)
+    ensure_merge_attributes(v_dir)
     return True, "Git repository initialized."
 
 
@@ -320,6 +347,13 @@ def sync(
         sync_status = "local_only"
 
         if has_remote:
+            # Existing vaults were created before the union merge policy;
+            # install it before the first pull that would need it.
+            if ensure_merge_attributes(v_dir):
+                _run_git(["add", ".gitattributes"], cwd=v_dir)
+                _run_git(["commit", "-m", "chore: union merge for append-only vault records"],
+                         cwd=v_dir)
+
             # 1. Pull changes with rebase
             if pull:
                 rc_pull, _, err_pull = _run_git(["pull", "--rebase", "origin", "main"], cwd=v_dir, timeout=20)
@@ -328,9 +362,14 @@ def sync(
                     # Re-import newly pulled records into local SQLite
                     import_from_vault(vault_dir=v_dir)
                 else:
-                    # If rebase conflict or offline, abort rebase cleanly
+                    # Abort cleanly, then say which failure this actually was.
+                    # Reporting a merge conflict as "offline" hid permanent
+                    # divergence behind what looks like a network blip.
                     _run_git(["rebase", "--abort"], cwd=v_dir)
-                    sync_status = "pull_offline"
+                    blob = f"{err_pull or ''}".lower()
+                    conflicted = any(w in blob for w in
+                                     ("conflict", "could not apply", "unmerged", "overwritten"))
+                    sync_status = "pull_conflict" if conflicted else "pull_offline"
 
             # 2. Push changes
             if push:
@@ -339,7 +378,10 @@ def sync(
                     pushed = True
                     sync_status = "synced"
                 else:
-                    sync_status = "push_offline"
+                    blob = f"{err_push or ''}".lower()
+                    sync_status = ("push_rejected"
+                                   if any(w in blob for w in ("rejected", "non-fast-forward", "fetch first"))
+                                   else "push_offline")
         else:
             sync_status = "no_remote"
 
