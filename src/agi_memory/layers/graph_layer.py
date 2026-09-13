@@ -17,7 +17,7 @@ import urllib.request
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 
-from .base import Hit, MemoryLayer, open_db
+from .base import Hit, MemoryLayer, open_db, stem_terms
 
 try:
     from agi_memory.config import CLAUDE_MEM_DB, DEFAULT_DB, get_default_db
@@ -591,6 +591,25 @@ class GraphLayer(MemoryLayer):
                         (f"%{t}%", f"%{t}%"))
             for (name,) in cur.fetchall():
                 matched_nodes.add(name)
+
+        if not matched_nodes:
+            # Nothing matched as written. Retry on stems so "authenticate"
+            # reaches a node described as "authentication". Only reached when
+            # the exact pass found nothing, so precision is unaffected.
+            stems = stem_terms(search_terms)
+            if stems:
+                try:
+                    cur.execute("SELECT name FROM graph_nodes_fts WHERE graph_nodes_fts MATCH ? LIMIT 10",
+                                (" OR ".join(f'"{st}"*' for st in stems),))
+                    for (name,) in cur.fetchall():
+                        matched_nodes.add(name)
+                except Exception:
+                    pass
+                for st in stems[:3]:
+                    cur.execute("SELECT name FROM graph_nodes WHERE name LIKE ? OR description LIKE ? LIMIT 5",
+                                (f"%{st}%", f"%{st}%"))
+                    for (name,) in cur.fetchall():
+                        matched_nodes.add(name)
 
         hits: List[Hit] = []
         seen_facts: Set[str] = set()

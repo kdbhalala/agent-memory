@@ -18,11 +18,11 @@ from typing import Any, Dict, List, Optional, Tuple
 
 try:
     from agi_memory.config import DEFAULT_DB, get_default_db
-    from agi_memory.layers.base import Hit, MemoryLayer, open_db
+    from agi_memory.layers.base import Hit, MemoryLayer, open_db, stem_terms
 except ImportError:
     try:
         from ..config import DEFAULT_DB, get_default_db
-        from .base import Hit, MemoryLayer, open_db
+        from .base import Hit, MemoryLayer, open_db, stem_terms
     except (ImportError, ValueError):
         from config import DEFAULT_DB, get_default_db
         from layers.base import Hit, MemoryLayer
@@ -518,6 +518,16 @@ class EpisodicLayer(MemoryLayer):
             # An over-specified question should degrade to partial recall,
             # never to silence.
             rows = run(cur, " OR ")
+        if not rows:
+            # Still nothing: retry on stems, so "retrying" finds a session
+            # about "retry". Last tier, so exact wording always wins.
+            stems = stem_terms(terms)
+            if stems:
+                saved_terms, saved_args = terms, per_term_args
+                terms = stems
+                per_term_args = [a for t in stems for a in (f"%{t}%",) * 3]
+                rows = run(cur, " AND ") or run(cur, " OR ")
+                terms, per_term_args = saved_terms, saved_args
         con.close()
 
         hits = []

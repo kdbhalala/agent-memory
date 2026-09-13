@@ -228,17 +228,25 @@ def main():
                 results["L4 code graph"][category][0] += hit
                 results["L4 code graph"][category][1] += 1
 
+        # Every layer that was loosened must be checked, not just L1.
         print("\nPrecision — is the RIGHT memory ranked first?\n")
-        prec_hits = 0
-        for query, expected_in_top in PRECISION_PROBES:
-            hits = l1.search(query, limit=3)
-            top = hits[0].text if hits else ""
-            ok = expected_in_top.lower() in top.lower()
-            prec_hits += ok
-            print(f"{'PASS' if ok else 'FAIL'} :: {query:<32} -> "
-                  f"{(top[:58] + '...') if top else '(no hits)'}")
-        precision = prec_hits / len(PRECISION_PROBES)
-        print(f"\nPrecision: {prec_hits}/{len(PRECISION_PROBES)} = {precision:.0%} "
+        prec_hits = prec_total = 0
+        for layer_name, fn in layers:
+            layer_hits = 0
+            for query, expected_in_top in PRECISION_PROBES:
+                hits = fn(query)
+                top = hits[0].text if hits else ""
+                ok = expected_in_top.lower() in top.lower()
+                layer_hits += ok
+                if not ok:
+                    print(f"FAIL {layer_name} :: {query:<30} -> "
+                          f"{(top[:52] + '...') if top else '(no hits)'}")
+            prec_hits += layer_hits
+            prec_total += len(PRECISION_PROBES)
+            print(f"  {layer_name:<14} {layer_hits}/{len(PRECISION_PROBES)} "
+                  f"({layer_hits / len(PRECISION_PROBES):.0%})")
+        precision = prec_hits / prec_total
+        print(f"\nPrecision: {prec_hits}/{prec_total} = {precision:.0%} "
               f"(budget: {PRECISION_BUDGET:.0%}, must not regress)")
 
     categories = ["morphological", "typo", "identifier", "abbreviation", "paraphrase"]

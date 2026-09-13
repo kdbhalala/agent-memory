@@ -53,3 +53,45 @@ class MemoryLayer:
 
     def search(self, query: str, limit: int = 5) -> list[Hit]:
         raise NotImplementedError
+
+# --- Query expansion -----------------------------------------------------------
+# L1 gets stemming from SQLite's porter tokenizer. L2/L3 match with LIKE and
+# prefix queries against no such index, so they stem in Python instead. Used
+# only as a FALLBACK after exact matching finds nothing, so a loosened term can
+# never outrank a real one.
+
+# Longest first: "authentication" must lose "ation", not "ion".
+_SUFFIXES = (
+    "izations", "isations", "ization", "isation", "ements", "ations", "ement",
+    "ments", "ation", "ition", "ingly", "edly", "ness", "ment", "tion", "sion",
+    "able", "ible", "ance", "ence", "ate", "ing", "ers", "ies", "ed", "es",
+    "ly", "er", "or", "al", "s", "e",
+)
+_MIN_STEM = 4
+
+
+def stem_word(word: str, min_stem: int = _MIN_STEM) -> str:
+    """Strip one common suffix, conservatively.
+
+    Deliberately crude and shared by L2/L3: "authenticate" and "authentication"
+    both reduce to "authentic", which is all a prefix match needs. A stem
+    shorter than min_stem is rejected, because over-stripping turns a precise
+    query into a wildcard.
+    """
+    w = str(word).lower()
+    if len(w) <= min_stem:
+        return w
+    for suffix in _SUFFIXES:
+        if w.endswith(suffix) and len(w) - len(suffix) >= min_stem:
+            return w[: -len(suffix)]
+    return w
+
+
+def stem_terms(terms) -> list:
+    """Stems that differ from their source term, de-duplicated, order preserved."""
+    out = []
+    for t in terms:
+        st = stem_word(t)
+        if st != str(t).lower() and st not in out:
+            out.append(st)
+    return out

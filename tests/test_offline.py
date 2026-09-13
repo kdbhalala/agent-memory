@@ -191,6 +191,22 @@ with tempfile.TemporaryDirectory() as tmp_dir:
         assert str(tool.get_config_path("user")) == base_cfg, f"{tname}: env leak"
 
 import re as _re_mod
+# The shared stemmer's failure mode is over-stripping: a stem so short it
+# behaves as a wildcard and drags unrelated memories into a fallback search.
+from agi_memory.layers.base import stem_word as _stem, stem_terms as _stems
+for _a, _b in [("authenticate", "authentication"), ("caching", "cached"),
+               ("retrying", "retry"), ("configure", "configuration"),
+               ("normalize", "normalized"), ("deploying", "deployed")]:
+    _sa, _sb = _stem(_a), _stem(_b)
+    assert _sa.startswith(_sb) or _sb.startswith(_sa), f"{_a}/{_b} -> {_sa}/{_sb}"
+for _w in ("api", "id", "db", "ci", "os", "cache", "user"):
+    assert len(_stem(_w)) >= min(len(_w), 4), f"over-stripped {_w} -> {_stem(_w)}"
+# distinct concepts must not collapse into one stem
+assert _stem("authorization") != _stem("authentication"), "auth* concepts collapsed"
+assert _stem("deployment") != _stem("dependency"), "unrelated words collapsed"
+# stems that equal their source add nothing and are dropped
+assert "retry" not in _stems(["retry"]) or _stem("retry") != "retry"
+
 # Homebrew formulae must track the packaged version. They shipped a v0.2.0
 # sha256 against a v0.4.0 tarball for two releases because nothing checked.
 _pyproject = (Path(__file__).resolve().parent.parent / "pyproject.toml").read_text(encoding="utf-8")
