@@ -152,6 +152,33 @@ def _hits_text(hits):
     return "\n---\n".join(h.text for h in hits) or "(no hits)"
 
 
+def _miss_text(query: str, project, layer) -> str:
+    """Explain a miss instead of returning a bare "(no hits)".
+
+    A memory tool whose pitch is "your assistant won't forget" is at its most
+    dangerous when it quietly finds nothing: the agent reads an empty result as
+    "no such decision was ever made" and proceeds to re-decide it. The reply
+    below distinguishes an empty store from a genuine miss and says what to do
+    next, so a miss is actionable rather than merely true.
+    """
+    try:
+        total = layer.count_observations(project=project)
+    except Exception:
+        total = None
+
+    proj = project or "(all projects)"
+    if total == 0:
+        return (f"(no memories stored yet for {proj})\n"
+                f"Nothing has been recorded for this project. This is an empty store, "
+                f"not a failed lookup — do not read it as 'no such decision exists'. "
+                f"Use memory_record to save decisions worth keeping.")
+    scope = f" among {total} stored" if total else ""
+    return (f"(no match for {query!r} in {proj}{scope})\n"
+            f"Memories exist here but none matched. This is a retrieval miss, not proof "
+            f"the information was never recorded — do not conclude the decision was never "
+            f"made. Try fewer or different words, or memory_recall_deep for a wider search.")
+
+
 def _core_text(blocks):
     if not blocks:
         return ""
@@ -174,7 +201,8 @@ def call_tool(name, args):
             return "(empty query)"
         pinned = l1.get_pinned_blocks(project=project) if hasattr(l1, "get_pinned_blocks") else []
         core_block = _core_text(pinned)
-        recent_text = _hits_text(l1.search(query, limit))
+        hits = l1.search(query, limit)
+        recent_text = _hits_text(hits) if hits else _miss_text(query, project, l1)
         if core_block:
             return f"{core_block}\n\n## recent\n{recent_text}"
         return recent_text
@@ -195,6 +223,9 @@ def call_tool(name, args):
         core_block = _core_text(r.get("core") or (l1.get_pinned_blocks(project=project) if hasattr(l1, "get_pinned_blocks") else []))
         if core_block:
             out += core_block + "\n\n"
+        if not r["recent"] and not r.get("durable"):
+            out += _miss_text(query, project, l1)
+            return out
         out += "## recent\n" + _hits_text(r["recent"])
         if r["durable"]:
             out += "\n\n## durable\n" + _hits_text(r["durable"])

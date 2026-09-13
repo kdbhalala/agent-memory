@@ -207,6 +207,36 @@ assert _stem("deployment") != _stem("dependency"), "unrelated words collapsed"
 # stems that equal their source add nothing and are dropped
 assert "retry" not in _stems(["retry"]) or _stem("retry") != "retry"
 
+# A miss must be legible. "(no hits)" let an agent read an empty result as
+# "no such decision exists" and re-decide something already settled.
+# Runs against an isolated store so it never depends on the developer's vault.
+with tempfile.TemporaryDirectory() as tmp_dir:
+    _prev_db = os.environ.get("AGI_MEMORY_DB")
+    os.environ["AGI_MEMORY_DB"] = str(Path(tmp_dir) / "miss.db")
+    try:
+        import importlib
+        from agi_memory import config as _cfg, mcp_server as _mcp
+        importlib.reload(_cfg)
+        importlib.reload(_mcp)
+        _empty = _mcp.call_tool("memory_recall", {"query": "anything", "project": "empty-proj"})
+        assert "no memories stored yet" in _empty, _empty[:140]
+        assert "empty store" in _empty, "must distinguish an empty store from a miss"
+
+        _mcp.call_tool("memory_record", {"text": "We chose SQLite FTS5 for working memory.",
+                                         "title": "Storage", "project": "miss-proj"})
+        _miss = _mcp.call_tool("memory_recall",
+                               {"query": "kubernetes ingress", "project": "miss-proj"})
+        assert "no match" in _miss, _miss[:140]
+        assert "not proof" in _miss, "a miss must not read as proof of absence"
+        assert _empty != _miss, "empty store and miss must not be indistinguishable"
+    finally:
+        if _prev_db is None:
+            os.environ.pop("AGI_MEMORY_DB", None)
+        else:
+            os.environ["AGI_MEMORY_DB"] = _prev_db
+        importlib.reload(_cfg)
+        importlib.reload(_mcp)
+
 # Two machines both recording between syncs must converge, not diverge.
 # Before the union merge policy this produced a rebase conflict that sync()
 # aborted and mislabelled "pull_offline", leaving both vaults permanently

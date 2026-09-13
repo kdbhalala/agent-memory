@@ -107,7 +107,7 @@ this with a looser matcher — that trades precision for nothing.
 
 ---
 
-## 5. Zero results are silent — OPEN
+## 5. Zero results are silent — DONE (2026-09-13)
 
 Nothing tells the agent (or the user) that a recall found nothing. A tool
 whose pitch is "your assistant won't forget" failing quietly manufactures
@@ -116,7 +116,7 @@ Cheap to fix and changes the behaviour of every miss.
 
 ---
 
-## 6. The pitch is written in the author's vocabulary — OPEN
+## 6. The pitch is written in the author's vocabulary — DONE (2026-09-13)
 
 README line 10 still opens with "Zero-dependency, high-performance four-pillar
 cognitive memory framework (Epistemic, Semantic, Episodic, Structural Code

@@ -100,6 +100,27 @@ class SessionLayer(MemoryLayer):
         self._migrate_fts_if_needed()
 
 
+    def count_observations(self, project: str | None = None) -> int:
+        """How many memories exist in scope. Lets a caller tell an empty store
+        apart from a failed lookup, which are very different answers."""
+        if not self.db_path.exists():
+            return 0
+        proj = project if project is not None else self.project
+        try:
+            con = open_db(self.db_path, readonly=True)
+            if proj in ("agi-memory", "agent-memory"):
+                row = con.execute(
+                    "SELECT count(*) FROM observations WHERE project IN ('agi-memory','agent-memory')"
+                ).fetchone()
+            elif proj:
+                row = con.execute("SELECT count(*) FROM observations WHERE project = ?", (proj,)).fetchone()
+            else:
+                row = con.execute("SELECT count(*) FROM observations").fetchone()
+            con.close()
+            return int(row[0]) if row else 0
+        except sqlite3.Error:
+            return 0
+
     def _migrate_fts_if_needed(self) -> None:
         """Upgrade an existing database's FTS index when the tokenizer changes.
 

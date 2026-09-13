@@ -8,9 +8,19 @@
 [![Evals](https://img.shields.io/badge/L1--L4%20evals-100%25-brightgreen.svg)](docs/testing.md)
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue.svg)](pyproject.toml)
 
-**Zero-dependency, high-performance four-pillar cognitive memory framework (Epistemic, Semantic, Episodic, Structural Code Graph) for AI coding assistants.**
+**Your AI coding assistant forgets everything between sessions. This remembers.**
 
-Share synchronized context, recent bugfixes, durable architectural decisions, session timelines, and codebase structure seamlessly across **Claude Code**, **Cursor**, **Windsurf**, **OpenAI Codex**, **OpenCode**, **Antigravity CLI**, **Aider**, **Goose**, **Cline**, **Roo Code**, **Crush**, **Pi**, and **Hermes Agent**.
+Decisions you already made, bugs you already fixed, what happened last session,
+how the codebase fits together — kept in a file on your machine and handed back
+to the assistant next time, so you stop re-explaining your own project.
+
+Works across **Claude Code**, **Cursor**, **Windsurf**, **OpenAI Codex**, **OpenCode**,
+**Antigravity CLI**, **Aider**, **Goose**, **Cline**, **Roo Code**, **Crush**, **Pi**
+and **Hermes Agent** — one memory, whichever tool you open.
+
+No dependencies, no vector database, no background daemon. ~32MB of RAM,
+sub-millisecond lookups, works offline. Comparable tools install ~500MB of
+machine-learning libraries and take 200–500ms per lookup.
 
 ---
 
